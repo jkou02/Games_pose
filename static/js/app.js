@@ -34,6 +34,8 @@ const estado = {
     restWorldDirs: {},
     restWorldQuats: {},
     restTorsoSide: null,
+    restHipsSide: null,
+    restHipsQuat: null,
     restLocalQuats: new Map(),
     huesosPiernas: [],
     huesoCadera: null,
@@ -1168,6 +1170,21 @@ function iniciarThreeJS() {
                 estado.restTorsoSide = posHombroI.sub(posHombroD).normalize();
             }
 
+            // Referencia de reposo de la pelvis: eje lateral y orientación.
+            const cadera = estado.huesos3d['mixamorigHips'];
+            const upLegI = estado.huesos3d['mixamorigLeftUpLeg'];
+            const upLegD = estado.huesos3d['mixamorigRightUpLeg'];
+            if (cadera && upLegI && upLegD) {
+                const posUpLegI = new THREE.Vector3();
+                const posUpLegD = new THREE.Vector3();
+                upLegI.getWorldPosition(posUpLegI);
+                upLegD.getWorldPosition(posUpLegD);
+                estado.restHipsSide = posUpLegI.sub(posUpLegD).normalize();
+                estado.restHipsQuat = cadera.getWorldQuaternion(new THREE.Quaternion());
+            } else {
+                console.warn('Rig incompleto: no se pudo calibrar la cadera.');
+            }
+
             // Ocultar indicador de carga
             const loadingEl = document.getElementById('loading-3d');
             if (loadingEl) loadingEl.classList.add('oculto');
@@ -1205,6 +1222,8 @@ function aplicarPose3D(payload) {
     if (valido) {
         if (avisoSinPose) avisoSinPose.classList.add('oculto');
 
+        // La columna es hija de la cadera: primero se mueve la pelvis.
+        orientarCadera(bones);
         orientarTorso(bones);
 
         for (const { clave, hueso, suavizado } of MAPA_HUESOS) {
@@ -1225,6 +1244,44 @@ function aplicarPose3D(payload) {
     }
 
     anclarPiernas();
+}
+
+const MUNDO_ARRIBA = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Orienta la pelvis con `hips_side` + el eje vertical del mundo.
+ *
+ * No se usa el tronco como vertical: la columna es hija de la cadera, así que
+ * aplicarle la inclinación del torso duplicaría la rotación.
+ */
+function orientarCadera(bones) {
+    const cadera = estado.huesos3d['mixamorigHips'];
+    const restSide = estado.restHipsSide;
+    const restQuat = estado.restHipsQuat;
+    const side = bones?.hips_side;
+
+    if (!cadera || !restSide || !restQuat || !side) return;
+    if (side.every((v) => v === 0)) return;
+
+    // Se proyecta al plano horizontal: la pelvis solo aporta yaw + roll.
+    const targetSide = new THREE.Vector3(-side[0], 0, -side[2]);
+    if (targetSide.lengthSq() < 1e-6) return;
+    targetSide.normalize();
+
+    const delta = new THREE.Matrix4().multiplyMatrices(
+        baseOrtonormal(targetSide, MUNDO_ARRIBA),
+        baseOrtonormal(restSide, MUNDO_ARRIBA).invert(),
+    );
+    const targetWorldQ = new THREE.Quaternion()
+        .setFromRotationMatrix(delta)
+        .multiply(restQuat);
+
+    const parentWorldQ = new THREE.Quaternion();
+    cadera.parent.getWorldQuaternion(parentWorldQ);
+    const localQ = parentWorldQ.invert().multiply(targetWorldQ);
+
+    cadera.quaternion.slerp(localQ, 0.22);
+    estado.modelo3d.updateMatrixWorld(true);
 }
 
 /**
@@ -1300,7 +1357,8 @@ function volverAReposo() {
             const breathQ = restQ.clone();
             breathQ.x += Math.sin(t * 1.6) * 0.015;
             bone.quaternion.slerp(breathQ, 0.08);
-        } else if (!estado.huesosPiernas.includes(bone) && bone !== estado.huesoCadera) {
+        } else if (!estado.huesosPiernas.includes(bone)) {
+            // Incluye la cadera: vuelve la rotación, nunca la posición.
             bone.quaternion.slerp(restQ, 0.08);
         }
     }
