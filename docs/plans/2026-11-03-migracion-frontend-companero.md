@@ -1074,3 +1074,13 @@ Si algo falla por falta de `bot.fbx`, informar al usuario que el bloqueo es el a
 **Consistencia de nombres:** `estado.ultimaPose` (Task 4) es el nombre usado en Tasks 5 y 6; `aplicarPose3D`, `volverAReposo`, `anclarPiernas`, `payloadALandmarks2D`, `dibujarOverlayPayload`, `INDICE_OVERLAY`, `createPoseSource` se usan con el mismo nombre en todos los pasos.
 
 **Riesgo abierto:** el `.fbx` no está en el repo. Sin él, Tasks 5 y 6 no se pueden verificar visualmente. Se debe avisar antes de empezar.
+
+## Correcciones posteriores (reporte del usuario)
+
+| Síntoma | Causa verificada | Corrección |
+|---|---|---|
+| El torso no se movía aunque los brazos sí | `bones` solo llevaba `torso_up`, un vector vertical que no distingue el giro alrededor de su eje. Girar los hombros sin inclinarse no cambiaba el vector. | Se agregó `bones.torso_side` y el cliente reconstruye una base ortonormal (inclinación + giro) para `mixamorigSpine`. |
+| El esqueleto no se ajustaba al cuerpo en el video | El overlay deducía la posición en pantalla desde metros con una escala fija (`ESCALA_VISTA`), que depende de la distancia y el FOV de la cámara. | El backend emite `landmarks_2d` (coordenadas normalizadas de imagen) y el overlay las usa directamente. |
+
+Verificación: con el emisor sintético, `torso_side [-0.98, 0, 0.20]` produce hombros
+del modelo `[0.974, 0, -0.228]` (espejo exacto) y el giro es visible en pantalla.
