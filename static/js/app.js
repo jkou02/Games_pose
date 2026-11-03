@@ -964,7 +964,10 @@ function animarConfeti() {
 function registrarSegmento(key, boneName, childName) {
     const b = estado.huesos3d[boneName];
     const c = estado.huesos3d[childName];
-    if (!b || !c) return;
+    if (!b || !c) {
+        console.warn(`Rig incompleto: faltan ${boneName} o ${childName}`);
+        return;
+    }
     const pB = new THREE.Vector3();
     const pC = new THREE.Vector3();
     b.getWorldPosition(pB);
@@ -1138,13 +1141,20 @@ function iniciarThreeJS() {
             estado.huesosPiernas = nombresPiernas.map((n) => estado.huesos3d[n]).filter(Boolean);
             estado.huesoCadera = estado.huesos3d['mixamorigHips'];
 
+            // §7: la cadera se ancla UNA sola vez al cargar, nunca por frame.
+            if (estado.huesoCadera) {
+                estado.huesoCadera.position.set(0, 104.27, 1.55);
+            }
+
             // Registrar direcciones y rotaciones del mundo en pose de reposo (T-Pose)
-            registrarSegmento('leftArm', 'mixamorigLeftArm', 'mixamorigLeftForeArm');
-            registrarSegmento('leftForeArm', 'mixamorigLeftForeArm', 'mixamorigLeftHand');
-            registrarSegmento('rightArm', 'mixamorigRightArm', 'mixamorigRightForeArm');
-            registrarSegmento('rightForeArm', 'mixamorigRightForeArm', 'mixamorigRightHand');
-            registrarSegmento('spine', 'mixamorigSpine', 'mixamorigSpine2');
-            registrarSegmento('neck', 'mixamorigNeck', 'mixamorigHead');
+            // Clave del payload -> (hueso, hijo) del rig Mixamo.
+            // El swap de lados es intencional: ver docs/contract.md §mapeo.
+            registrarSegmento('torso_up', 'mixamorigSpine', 'mixamorigSpine2');
+            registrarSegmento('head', 'mixamorigNeck', 'mixamorigHead');
+            registrarSegmento('right_upper_arm', 'mixamorigLeftArm', 'mixamorigLeftForeArm');
+            registrarSegmento('right_lower_arm', 'mixamorigLeftForeArm', 'mixamorigLeftHand');
+            registrarSegmento('left_upper_arm', 'mixamorigRightArm', 'mixamorigRightForeArm');
+            registrarSegmento('left_lower_arm', 'mixamorigRightForeArm', 'mixamorigRightHand');
 
             // Ocultar indicador de carga
             const loadingEl = document.getElementById('loading-3d');
@@ -1163,123 +1173,63 @@ function iniciarThreeJS() {
     );
 }
 
-function actualizarMuñeco3D(poseLandmarks) {
+const MAPA_HUESOS = [
+    { clave: 'torso_up', hueso: 'mixamorigSpine', suavizado: 0.22 },
+    { clave: 'head', hueso: 'mixamorigNeck', suavizado: 0.28 },
+    { clave: 'right_upper_arm', hueso: 'mixamorigLeftArm', suavizado: 0.35 },
+    { clave: 'right_lower_arm', hueso: 'mixamorigLeftForeArm', suavizado: 0.35 },
+    { clave: 'left_upper_arm', hueso: 'mixamorigRightArm', suavizado: 0.35 },
+    { clave: 'left_lower_arm', hueso: 'mixamorigRightForeArm', suavizado: 0.35 },
+];
+
+function aplicarPose3D(payload) {
     if (!estado.modelo3d || estado.cargando3d) return;
 
     const avisoSinPose = document.getElementById('aviso-sin-pose');
+    const bones = payload?.bones ?? {};
+    // Todos los vectores en cero significa tracking perdido.
+    const valido = payload?.detected && (bones.torso_up ?? []).some((v) => v !== 0);
 
-    if (poseLandmarks && poseLandmarks[LM.NOSE] && poseLandmarks[LM.LEFT_SHOULDER] && poseLandmarks[LM.RIGHT_SHOULDER]) {
+    if (valido) {
         if (avisoSinPose) avisoSinPose.classList.add('oculto');
 
-        const hI = poseLandmarks[LM.LEFT_SHOULDER];
-        const hD = poseLandmarks[LM.RIGHT_SHOULDER];
-        const codoI = poseLandmarks[LM.LEFT_ELBOW];
-        const codoD = poseLandmarks[LM.RIGHT_ELBOW];
-        const munI = poseLandmarks[LM.LEFT_WRIST];
-        const munD = poseLandmarks[LM.RIGHT_WRIST];
-        const cadI = poseLandmarks[LM.LEFT_HIP];
-        const cadD = poseLandmarks[LM.RIGHT_HIP];
-        const nariz = poseLandmarks[LM.NOSE];
-
-        // Función para calcular vector director normalizado en coordenadas 3D espejadas
-        // +X a la derecha, +Y arriba, +Z hacia el observador
-        const dirVec = (pOrig, pDest) => {
-            if (!pOrig || !pDest) return null;
-            const vx = -(pDest.x - pOrig.x);
-            const vy = -(pDest.y - pOrig.y);
-            const vz = -((pDest.z || 0) - (pOrig.z || 0)) * 2.2;
-            const v = new THREE.Vector3(vx, vy, vz);
-            return v.lengthSq() > 0.0001 ? v.normalize() : null;
-        };
-
-        // Centros anatómicos
-        const hombrosCentro = {
-            x: (hI.x + hD.x) * 0.5,
-            y: (hI.y + hD.y) * 0.5,
-            z: ((hI.z || 0) + (hD.z || 0)) * 0.5
-        };
-        const caderaCentro = (cadI && cadD) ? {
-            x: (cadI.x + cadD.x) * 0.5,
-            y: (cadI.y + cadD.y) * 0.5,
-            z: ((cadI.z || 0) + (cadD.z || 0)) * 0.5
-        } : {
-            x: hombrosCentro.x,
-            y: hombrosCentro.y + Math.hypot(hI.x - hD.x, hI.y - hD.y) * 1.35,
-            z: hombrosCentro.z
-        };
-
-        // Vectores objetivo (Modo Espejo Natural):
-        // Brazo derecho del usuario (pantalla derecha) -> Brazo izquierdo del bot (pantalla derecha)
-        const targetLeftArm = dirVec(hD, codoD);
-        const targetLeftForeArm = dirVec(codoD, munD);
-
-        // Brazo izquierdo del usuario (pantalla izquierda) -> Brazo derecho del bot (pantalla izquierda)
-        const targetRightArm = dirVec(hI, codoI);
-        const targetRightForeArm = dirVec(codoI, munI);
-
-        // Torso / Columna vertebral
-        const targetSpine = dirVec(caderaCentro, hombrosCentro);
-
-        // Cabeza / Cuello
-        const targetNeck = dirVec(hombrosCentro, nariz);
-
-        // 1. Orientar Columna (Torso)
-        const spine = estado.huesos3d['mixamorigSpine'];
-        if (spine && targetSpine && estado.restWorldDirs.spine) {
-            orientarHueso(spine, estado.restWorldDirs.spine, estado.restWorldQuats.spine, targetSpine, 0.22);
-            estado.modelo3d.updateMatrixWorld(true);
-        }
-
-        // 2. Orientar Cabeza / Cuello
-        const neck = estado.huesos3d['mixamorigNeck'];
-        if (neck && targetNeck && estado.restWorldDirs.neck) {
-            orientarHueso(neck, estado.restWorldDirs.neck, estado.restWorldQuats.neck, targetNeck, 0.28);
-            estado.modelo3d.updateMatrixWorld(true);
-        }
-
-        // 3. Brazo Izquierdo del Avatar (lado derecho de la pantalla)
-        const leftArm = estado.huesos3d['mixamorigLeftArm'];
-        const leftForeArm = estado.huesos3d['mixamorigLeftForeArm'];
-        if (leftArm && targetLeftArm && estado.restWorldDirs.leftArm) {
-            orientarHueso(leftArm, estado.restWorldDirs.leftArm, estado.restWorldQuats.leftArm, targetLeftArm, 0.35);
-            estado.modelo3d.updateMatrixWorld(true);
-        }
-        if (leftForeArm && targetLeftForeArm && estado.restWorldDirs.leftForeArm) {
-            orientarHueso(leftForeArm, estado.restWorldDirs.leftForeArm, estado.restWorldQuats.leftForeArm, targetLeftForeArm, 0.35);
-            estado.modelo3d.updateMatrixWorld(true);
-        }
-
-        // 4. Brazo Derecho del Avatar (lado izquierdo de la pantalla)
-        const rightArm = estado.huesos3d['mixamorigRightArm'];
-        const rightForeArm = estado.huesos3d['mixamorigRightForeArm'];
-        if (rightArm && targetRightArm && estado.restWorldDirs.rightArm) {
-            orientarHueso(rightArm, estado.restWorldDirs.rightArm, estado.restWorldQuats.rightArm, targetRightArm, 0.35);
-            estado.modelo3d.updateMatrixWorld(true);
-        }
-        if (rightForeArm && targetRightForeArm && estado.restWorldDirs.rightForeArm) {
-            orientarHueso(rightForeArm, estado.restWorldDirs.rightForeArm, estado.restWorldQuats.rightForeArm, targetRightForeArm, 0.35);
+        for (const { clave, hueso, suavizado } of MAPA_HUESOS) {
+            const dir = bones[clave];
+            if (!dir || dir.every((v) => v === 0)) continue;
+            orientarHueso(
+                estado.huesos3d[hueso],
+                estado.restWorldDirs[clave],
+                estado.restWorldQuats[clave],
+                new THREE.Vector3(dir[0], dir[1], dir[2]),
+                suavizado,
+            );
             estado.modelo3d.updateMatrixWorld(true);
         }
     } else {
-        // Sin detección activa: postura de reposo natural con respiración sutil
         if (avisoSinPose && estado.vistaActual === '3d') avisoSinPose.classList.remove('oculto');
+        volverAReposo();
+    }
 
-        const t = performance.now() * 0.002;
-        for (const [bone, restQ] of estado.restLocalQuats.entries()) {
-            if (bone === estado.huesos3d['mixamorigSpine']) {
-                const breathQ = restQ.clone();
-                breathQ.x += Math.sin(t * 1.6) * 0.015;
-                bone.quaternion.slerp(breathQ, 0.08);
-            } else if (!estado.huesosPiernas.includes(bone) && bone !== estado.huesoCadera) {
-                bone.quaternion.slerp(restQ, 0.08);
-            }
+    anclarPiernas();
+}
+
+function volverAReposo() {
+    // §7: sin detección se interpola suave a la pose neutra, nunca se congela.
+    const t = performance.now() * 0.002;
+    for (const [bone, restQ] of estado.restLocalQuats.entries()) {
+        if (bone === estado.huesos3d['mixamorigSpine']) {
+            const breathQ = restQ.clone();
+            breathQ.x += Math.sin(t * 1.6) * 0.015;
+            bone.quaternion.slerp(breathQ, 0.08);
+        } else if (!estado.huesosPiernas.includes(bone) && bone !== estado.huesoCadera) {
+            bone.quaternion.slerp(restQ, 0.08);
         }
     }
+}
 
-    // 🔒 PIERNAS Y CADERA 100% ESTÁTICAS Y ANCLADAS AL SUELO
-    if (estado.huesoCadera) {
-        estado.huesoCadera.position.set(0, 104.27, 1.55);
-    }
+function anclarPiernas() {
+    // §6: el avatar queda fijo de la cadera hacia abajo. La cadera se ancla una
+    // sola vez al cargar; acá solo se congelan las piernas.
     for (const leg of estado.huesosPiernas) {
         const q = estado.restLocalQuats.get(leg);
         if (q) leg.quaternion.copy(q);
@@ -1291,7 +1241,7 @@ function actualizarMuñeco3D(poseLandmarks) {
 // ============================================
 function loopAnimacion() {
     if (estado.vistaActual === '3d') {
-        actualizarMuñeco3D(estado.poseActual);
+        aplicarPose3D(estado.ultimaPose);
         if (estado.renderizador3d && estado.escena3d && estado.camara3d) {
             if (estado.controles3d) estado.controles3d.update();
             estado.renderizador3d.render(estado.escena3d, estado.camara3d);
