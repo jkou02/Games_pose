@@ -22,16 +22,17 @@ Se adopta una **arquitectura desacoplada (Productor - Consumidor)**:
       │  JSON vía ws://127.0.0.1:8765 (30-60 FPS)
       ▼
 [ Frontend: Web / Three.js ]
-  ├── Cliente WebSocket
-  ├── Motor de render Three.js (HTML5 / Vanilla JS o Vite)
-  ├── Gestor de avatar (Loader `.glb` / `.gltf`)
+  ├── Servidor Flask (`servidor.py`) que sirve plantilla y estáticos
+  ├── Cliente WebSocket (`static/js/pose-source.js`)
+  ├── Motor de render Three.js vendorizado en `static/vendor/three`
+  ├── Gestor de avatar (Loader `.fbx` desde `animados/`)
   └── Solver cinemático (Mapeo de rotaciones a huesos Mixamo)
 ```
 
 * **Backend:** Python 3.10+ con `opencv-python` y `mediapipe`.
+* **Frontend:** Flask + Three.js en módulos ES nativos, sin build ni CDN. Sirve offline.
 * **Canal de Transporte:** WebSocket local bidireccional/broadcast (puerto por defecto: `8765`). Se elige WebSocket sobre UDP simple por su compatibilidad nativa inmediata con APIs de navegador sin proxys ni pasarelas intermedias.
-* **Frontend:** Three.js sobre navegador web moderno con aceleración por hardware.
-* **Formato 3D:** Modelos estándar `.glb` / `.gltf` con esqueleto humanoide (*rig*) bajo convención de nombres **Mixamo**.
+* **Formato 3D:** Modelos `.fbx` con esqueleto humanoide (*rig*) bajo convención de nombres **Mixamo**, servidos desde `animados/`.
 
 ---
 
@@ -116,6 +117,7 @@ El desarrollo debe realizarse de forma secuencial y verificable por hitos:
 4. **Fase 4: Mapeo de Huesos y Cinemática (Frontend)**
    - Mapeo de vectores directores a cuaterniones locales de los huesos principales del tren superior (`mixamorig:RightArm`, `mixamorig:RightForeArm`, `mixamorig:LeftArm`, `mixamorig:LeftForeArm`, `mixamorig:Head`).
    - Aplicación estricta de rotación local sin alterar posiciones para proteger la integridad de la malla.
+   - **Estado:** implementada en `static/js/app.js` (`MAPA_HUESOS` + `aplicarPose3D`). El mapeo invierte lados de forma deliberada (`right_*` → `mixamorigLeft*`) porque el eje X llega espejado desde el backend; ver `docs/contract.md`.
 5. **Fase 5: Integración y Estabilización**
    - Incorporación del filtro de suavizado temporal para suprimir el temblor (*jitter*).
    - Inserción de ventana PiP (*Picture-in-Picture*) con el feed de video y el esqueleto superpuesto para retroalimentación visual al público.
