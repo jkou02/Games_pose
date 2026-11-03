@@ -88,4 +88,6 @@ def compute_bones(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
 
 def to_list(vec: Sequence[float], decimals: int = 4) -> list[float]:
     """Redondea para reducir ancho de banda del payload."""
-    return [round(float(component), decimals) for component in vec]
+    values = [round(float(component), decimals) for component in vec]
+    # Evita -0.0 en el JSON sin cambiar el valor numérico.
+    return [0.0 if value == 0 else value for value in values]
