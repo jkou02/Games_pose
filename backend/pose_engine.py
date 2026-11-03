@@ -18,9 +18,22 @@ class PoseEngine:
         self._pose = mp.solutions.pose.Pose(
             static_image_mode=False,
             model_complexity=model_complexity,
-            min_detection_confidence=0.5,
+            min_detection_confidence=min_confidence,
             min_tracking_confidence=0.5,
         )
+
+    @staticmethod
+    def _landmarks_2d(pose_landmarks) -> dict[str, list[float]]:
+        """Coordenadas normalizadas de imagen (0..1) para calcar sobre el video."""
+        if not pose_landmarks:
+            return {}
+        return {
+            name: [
+                round(float(pose_landmarks.landmark[index].x), 4),
+                round(float(pose_landmarks.landmark[index].y), 4),
+            ]
+            for index, name in LANDMARK_KEYS.items()
+        }
 
     def process(self, frame_bgr: np.ndarray) -> dict:
         rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
@@ -38,7 +51,12 @@ class PoseEngine:
 
         points = normalize_landmarks(raw)
         bones = compute_bones(points)
-        return build_payload(points, bones, confidence)
+        return build_payload(
+            points,
+            bones,
+            confidence,
+            landmarks_2d=self._landmarks_2d(results.pose_landmarks),
+        )
 
     def close(self) -> None:
         self._pose.close()

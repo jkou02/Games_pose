@@ -80,7 +80,7 @@ def test_bones_are_unit_vectors_with_expected_direction():
 def test_head_bone_apunta_del_centro_de_hombros_a_la_nariz():
     points = normalize_landmarks(make_landmarks())
     bones = compute_bones(points)
-    assert set(bones) == set(BONE_DEFINITIONS) | {"torso_up", "head"}
+    assert set(bones) == set(BONE_DEFINITIONS) | {"torso_up", "head", "torso_side"}
     head = bones["head"]
     assert np.linalg.norm(head) == pytest.approx(1.0, abs=1e-6)
     # La nariz está por encima del centro de hombros en el fixture
@@ -95,3 +95,12 @@ def test_unit_handles_zero_vector_without_nan():
 
 def test_to_list_rounds_to_four_decimals():
     assert to_list(np.array([0.123456, -1.0, 0.0])) == [0.1235, -1.0, 0.0]
+
+
+def test_torso_side_apunta_del_hombro_derecho_al_izquierdo():
+    points = normalize_landmarks(make_landmarks())
+    bones = compute_bones(points)
+    side = bones["torso_side"]
+    assert np.linalg.norm(side) == pytest.approx(1.0, abs=1e-6)
+    # El payload ya está espejado: el hombro izquierdo del sujeto queda en -X.
+    assert side[0] == pytest.approx(-1.0, abs=1e-6)

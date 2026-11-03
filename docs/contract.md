@@ -34,9 +34,8 @@ detectada:
 }
 ```
 
-> El ejemplo se capturó antes de agregar `bones.head`. El backend ahora emite
-> también ese campo (vector centro de hombros → nariz), así que `bones` tiene 6
-> entradas.
+> El ejemplo es anterior a `bones.head`, `bones.torso_side` y `landmarks_2d`.
+> El backend emite hoy los siete huesos y las coordenadas de imagen.
 
 ## Campos
 
@@ -46,7 +45,8 @@ detectada:
 | `detected` | bool | `false` si no hay persona o la confianza es menor a `--min-confidence`. |
 | `confidence` | float | Promedio de `visibility` de los 9 landmarks del contrato, 3 decimales. |
 | `landmarks` | objeto | 9 puntos, coordenadas `[x, y, z]` en metros. |
-| `bones` | objeto | 6 vectores unitarios `[x, y, z]`. |
+| `landmarks_2d` | objeto | 9 puntos, coordenadas normalizadas `[x, y]` de la imagen (0..1). |
+| `bones` | objeto | 7 vectores unitarios `[x, y, z]`. |
 
 ### `landmarks`
 
@@ -88,9 +88,25 @@ Vectores unitarios (`norma == 1.0`) que apuntan del origen al destino del segmen
 | `left_upper_arm` | `left_shoulder` | `left_elbow` |
 | `left_lower_arm` | `left_elbow` | `left_wrist` |
 | `torso_up` | centro de cadera | centro de hombros |
+| `torso_side` | `right_shoulder` | `left_shoulder` |
 | `head` | centro de hombros | `nose` |
 
 Los nombres `left_*` / `right_*` son siempre desde el punto de vista del sujeto.
+
+`torso_up` y `torso_side` se usan juntos para reconstruir la orientación del
+torso. Un solo vector vertical no distingue el giro alrededor de su propio eje: si
+el cliente mapea únicamente `torso_up`, el torso se queda rígido cuando la persona
+gira los hombros sin inclinarse.
+
+### `landmarks_2d`
+
+Coordenadas normalizadas de la imagen original de la cámara (0..1, origen arriba a
+la izquierda), sin espejar. Son las únicas que permiten calcar el esqueleto sobre el
+video: la posición en pantalla **no** se puede deducir de `landmarks`, porque depende
+de la distancia y del campo de visión de la cámara.
+
+El cliente las usa tal cual para el canvas que está espejado por CSS, y las invierte
+(`1 - x`) para el panel 2D que no lo está.
 
 Si un segmento tiene longitud despreciable (`< 1e-8`) el backend emite `[0.0, 0.0, 0.0]`
 en lugar de `NaN`. Un cliente debe ignorar vectores nulos.
@@ -118,7 +134,7 @@ rotaciones de huesos del rig Mixamo, **con swap de lados deliberado**:
 
 | `bones` | Hueso del avatar |
 |---|---|
-| `torso_up` | `mixamorigSpine` |
+| `torso_up` + `torso_side` | `mixamorigSpine` (base ortonormal: inclinación + giro) |
 | `head` | `mixamorigNeck` |
 | `right_upper_arm` / `right_lower_arm` | `mixamorigLeftArm` / `mixamorigLeftForeArm` |
 | `left_upper_arm` / `left_lower_arm` | `mixamorigRightArm` / `mixamorigRightForeArm` |

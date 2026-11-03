@@ -15,13 +15,22 @@ def build_payload(
     confidence: float,
     detected: bool = True,
     timestamp: float | None = None,
+    landmarks_2d: Mapping[str, Sequence[float]] | None = None,
 ) -> dict:
-    """Arma el paquete estándar de un frame detectado."""
+    """Arma el paquete estándar de un frame detectado.
+
+    `landmarks_2d` son las coordenadas normalizadas de la imagen (0..1) que usa
+    el frontend para calcar el esqueleto sobre el video. Sin ellas el overlay no
+    puede alinearse: la proyección no se deduce de las coordenadas métricas.
+    """
     return {
         "timestamp": round(float(time.time() if timestamp is None else timestamp), 3),
         "detected": bool(detected),
         "confidence": round(float(confidence), 3),
         "landmarks": {name: to_list(vec) for name, vec in landmarks.items()},
+        "landmarks_2d": {
+            name: to_list(vec, decimals=4) for name, vec in (landmarks_2d or {}).items()
+        },
         "bones": {name: to_list(vec) for name, vec in bones.items()},
     }
 
@@ -33,6 +42,7 @@ def empty_payload(timestamp: float | None = None) -> dict:
         "detected": False,
         "confidence": 0.0,
         "landmarks": {},
+        "landmarks_2d": {},
         "bones": {},
     }
 

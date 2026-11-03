@@ -57,20 +57,33 @@ El backend transmitirá paquetes en formato JSON en cada cuadro procesado. Para 
     "left_hip": [-0.15, 0.9, 0.0],
     "right_hip": [0.15, 0.9, 0.0]
   },
+  "landmarks_2d": {
+    "nose": [0.50, 0.22],
+    "left_shoulder": [0.60, 0.36],
+    "right_shoulder": [0.40, 0.36],
+    "left_elbow": [0.66, 0.50],
+    "right_elbow": [0.34, 0.50],
+    "left_wrist": [0.68, 0.62],
+    "right_wrist": [0.32, 0.62],
+    "left_hip": [0.56, 0.70],
+    "right_hip": [0.44, 0.70]
+  },
   "bones": {
     "right_upper_arm": [0.82, -0.57, 0.0],
     "right_lower_arm": [0.15, -0.98, 0.1],
     "left_upper_arm": [-0.82, -0.57, 0.0],
     "left_lower_arm": [-0.15, -0.98, 0.1],
     "torso_up": [0.0, 1.0, 0.0],
+    "torso_side": [-1.0, 0.0, 0.0],
     "head": [0.0, 0.55, 0.83]
   }
 }
 ```
 
 * `landmarks`: Coordenadas métricas $(X, Y, Z)$ relativas a la cadera en el sistema de coordenadas de Three.js.
+* `landmarks_2d`: Coordenadas normalizadas $(x, y) \in [0,1]$ de la imagen original, sin espejar. Necesarias para calcar el esqueleto sobre el video.
 * `bones`: Vectores unitarios normalizados $(\Delta X, \Delta Y, \Delta Z)$ de cada segmento óseo, calculados en el backend para aligerar la carga matemática del cliente web.
-  `torso_up` va del centro de cadera al centro de hombros y `head` del centro de hombros a la nariz.
+  `torso_up` va del centro de cadera al centro de hombros, `torso_side` del hombro derecho al izquierdo y `head` del centro de hombros a la nariz. `torso_up` y `torso_side` juntos definen la orientación del torso, incluido su giro.
 
 ---
 

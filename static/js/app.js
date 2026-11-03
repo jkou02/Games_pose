@@ -33,11 +33,15 @@ const estado = {
     huesos3d: {},
     restWorldDirs: {},
     restWorldQuats: {},
+    restTorsoSide: null,
     restLocalQuats: new Map(),
     huesosPiernas: [],
     huesoCadera: null,
     cargando3d: true,
 };
+
+// Hook de diagnóstico: permite inspeccionar el estado desde la consola del navegador.
+window.__mocap = estado;
 
 // ============================================
 // ÍNDICES NATIVOS DE MEDIAPIPE POSE
@@ -661,7 +665,7 @@ function renderizarEspacioLandmarks() {
     const avisoSinPose = document.getElementById('aviso-sin-pose');
 
     // Extraer landmarks extendidos en modo espejo (espejo = true)
-    const P = extraerLandmarksCompletos(estado.landmarksOverlay, w, h, false);
+    const P = extraerLandmarksCompletos(estado.landmarksOverlay, w, h, true);
 
     if (!P) {
         if (avisoSinPose) avisoSinPose.classList.remove('oculto');
@@ -788,9 +792,11 @@ const CONEXIONES_OVERLAY = [
 function dibujarOverlayPayload(ctx, landmarks, w, h) {
     if (!landmarks) return;
     const paleta = PALETAS[estado.estiloActual] || PALETAS.neon;
+    // `landmarks_2d` son coordenadas de la imagen original; el canvas está
+    // espejado por CSS (#canvas-pose), así que se dibujan sin invertir.
     const punto = (clave) => {
         const lm = landmarks[INDICE_OVERLAY[clave]];
-        return lm ? { x: (1 - lm.x) * w, y: lm.y * h } : null;
+        return lm ? { x: lm.x * w, y: lm.y * h } : null;
     };
 
     ctx.lineWidth = 4;
@@ -844,9 +850,6 @@ function iniciarVideoLocal() {
 // ============================================
 // WEBSOCKET BACKEND (FUENTE ÚNICA DE POSE)
 // ============================================
-//: Metros que cubre el alto del encuadre de los paneles 2D.
-const ESCALA_VISTA = 1.4;
-
 //: Índice de MediaPipe de cada landmark del contrato.
 const INDICE_OVERLAY = {
     nose: 0,
@@ -861,22 +864,19 @@ const INDICE_OVERLAY = {
 };
 
 /**
- * Proyecta los landmarks del payload (metros, cadera al origen, X ya espejada)
- * al formato normalizado 0..1 que consumen `extraerLandmarksCompletos` y el
- * overlay. Devuelve un arreglo disperso de 33 posiciones.
+ * Arma un arreglo disperso de 33 posiciones con las coordenadas de imagen
+ * (0..1) que manda el backend en `landmarks_2d`. Son las que permiten calcar el
+ * esqueleto sobre el video: la posición en la imagen no se deduce de las
+ * coordenadas métricas.
  */
 function payloadALandmarks2D(payload) {
-    if (!payload?.detected) return null;
+    const puntos = payload?.detected ? payload.landmarks_2d : null;
+    if (!puntos) return null;
     const salida = new Array(33).fill(null);
     for (const [clave, idx] of Object.entries(INDICE_OVERLAY)) {
-        const p = payload.landmarks?.[clave];
+        const p = puntos[clave];
         if (!p) continue;
-        salida[idx] = {
-            x: 0.5 + p[0] / (2 * ESCALA_VISTA),
-            y: 0.5 - p[1] / (2 * ESCALA_VISTA),
-            z: p[2],
-            visibility: payload.confidence ?? 1,
-        };
+        salida[idx] = { x: p[0], y: p[1], z: 0, visibility: payload.confidence ?? 1 };
     }
     return salida;
 }
@@ -1156,6 +1156,18 @@ function iniciarThreeJS() {
             registrarSegmento('left_upper_arm', 'mixamorigRightArm', 'mixamorigRightForeArm');
             registrarSegmento('left_lower_arm', 'mixamorigRightForeArm', 'mixamorigRightHand');
 
+            // Eje lateral del torso en reposo: junto con la dirección vertical
+            // forma la base que permite recuperar el giro (yaw) del torso.
+            const posHombroI = new THREE.Vector3();
+            const posHombroD = new THREE.Vector3();
+            const hombroI = estado.huesos3d['mixamorigLeftShoulder'];
+            const hombroD = estado.huesos3d['mixamorigRightShoulder'];
+            if (hombroI && hombroD) {
+                hombroI.getWorldPosition(posHombroI);
+                hombroD.getWorldPosition(posHombroD);
+                estado.restTorsoSide = posHombroI.sub(posHombroD).normalize();
+            }
+
             // Ocultar indicador de carga
             const loadingEl = document.getElementById('loading-3d');
             if (loadingEl) loadingEl.classList.add('oculto');
@@ -1173,8 +1185,8 @@ function iniciarThreeJS() {
     );
 }
 
+//: Huesos que se orientan con un único vector director.
 const MAPA_HUESOS = [
-    { clave: 'torso_up', hueso: 'mixamorigSpine', suavizado: 0.22 },
     { clave: 'head', hueso: 'mixamorigNeck', suavizado: 0.28 },
     { clave: 'right_upper_arm', hueso: 'mixamorigLeftArm', suavizado: 0.35 },
     { clave: 'right_lower_arm', hueso: 'mixamorigLeftForeArm', suavizado: 0.35 },
@@ -1192,6 +1204,8 @@ function aplicarPose3D(payload) {
 
     if (valido) {
         if (avisoSinPose) avisoSinPose.classList.add('oculto');
+
+        orientarTorso(bones);
 
         for (const { clave, hueso, suavizado } of MAPA_HUESOS) {
             const dir = bones[clave];
@@ -1211,6 +1225,71 @@ function aplicarPose3D(payload) {
     }
 
     anclarPiernas();
+}
+
+/**
+ * Orienta la columna con dos vectores del payload (`torso_up` y `torso_side`).
+ *
+ * Un solo vector vertical no alcanza: no distingue el giro del torso alrededor
+ * de su propio eje, así que el avatar se quedaba rígido al girar los hombros.
+ * Construyendo una base ortonormal con ambos vectores se recupera la rotación
+ * completa (inclinación + giro).
+ */
+function orientarTorso(bones) {
+    const spine = estado.huesos3d['mixamorigSpine'];
+    const restUp = estado.restWorldDirs.torso_up;
+    const restQuat = estado.restWorldQuats.torso_up;
+    const restSide = estado.restTorsoSide;
+    const up = bones?.torso_up;
+    const side = bones?.torso_side;
+
+    if (!spine || !restUp || !restQuat) return;
+
+    // Compatibilidad: si el backend no manda `torso_side`, se usa solo la
+    // inclinación, como antes.
+    if (!side || !restSide) {
+        if (up && !up.every((v) => v === 0)) {
+            orientarHueso(
+                spine,
+                restUp,
+                restQuat,
+                new THREE.Vector3(up[0], up[1], up[2]),
+                0.22,
+            );
+            estado.modelo3d.updateMatrixWorld(true);
+        }
+        return;
+    }
+
+    if (!up || up.every((v) => v === 0) || side.every((v) => v === 0)) return;
+
+    // El payload viene espejado en X, así que el lado anatómico del modelo es
+    // el opuesto al que reporta el backend.
+    const targetUp = new THREE.Vector3(up[0], up[1], up[2]).normalize();
+    const targetSide = new THREE.Vector3(-side[0], -side[1], -side[2]).normalize();
+
+    const delta = new THREE.Matrix4().multiplyMatrices(
+        baseOrtonormal(targetSide, targetUp),
+        baseOrtonormal(restSide, restUp).invert(),
+    );
+    const targetWorldQ = new THREE.Quaternion()
+        .setFromRotationMatrix(delta)
+        .multiply(restQuat);
+
+    const parentWorldQ = new THREE.Quaternion();
+    spine.parent.getWorldQuaternion(parentWorldQ);
+    const localQ = parentWorldQ.invert().multiply(targetWorldQ);
+
+    spine.quaternion.slerp(localQ, 0.22);
+    estado.modelo3d.updateMatrixWorld(true);
+}
+
+/** Base ortonormal (X = lateral, Y = vertical) para comparar orientaciones. */
+function baseOrtonormal(side, up) {
+    const x = side.clone().normalize();
+    const z = new THREE.Vector3().crossVectors(x, up).normalize();
+    const y = new THREE.Vector3().crossVectors(z, x).normalize();
+    return new THREE.Matrix4().makeBasis(x, y, z);
 }
 
 function volverAReposo() {
