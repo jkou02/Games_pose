@@ -44,9 +44,9 @@ detectada:
 |---|---|---|
 | `timestamp` | float | Segundos desde epoch, 3 decimales. |
 | `detected` | bool | `false` si no hay persona o la confianza es menor a `--min-confidence`. |
-| `confidence` | float | Promedio de `visibility` de los 9 landmarks del contrato, 3 decimales. |
-| `landmarks` | objeto | 9 puntos, coordenadas `[x, y, z]` en metros. |
-| `landmarks_2d` | objeto | 9 puntos, coordenadas normalizadas `[x, y]` de la imagen (0..1). |
+| `confidence` | float | Promedio de `visibility` de los 9 puntos del tren superior, 3 decimales. |
+| `landmarks` | objeto | 13 puntos, coordenadas `[x, y, z]` en metros. |
+| `landmarks_2d` | objeto | 13 puntos, coordenadas normalizadas `[x, y]` de la imagen (0..1). |
 | `bones` | objeto | 8 vectores unitarios `[x, y, z]`. |
 
 ### `landmarks`
@@ -71,7 +71,25 @@ izquierda, el avatar la levanta del mismo lado que ve el público. Por eso el
 frontend **no** debe aplicar `scale.x = -1` ni espejar la cámara.
 
 Claves: `nose`, `left_shoulder`, `right_shoulder`, `left_elbow`, `right_elbow`,
-`left_wrist`, `right_wrist`, `left_hip`, `right_hip`.
+`left_wrist`, `right_wrist`, `left_hip`, `right_hip`, `left_knee`, `right_knee`,
+`left_ankle`, `right_ankle`.
+
+### Tren inferior
+
+`left_knee` / `right_knee` y `left_ankle` / `right_ankle` existen para el IK de
+piernas:
+
+- **Tobillos:** objetivo del solver. El cliente lo escala al tamaño del rig.
+- **Rodillas:** definen el plano de flexión (*pole vector*). Sin ellas la rodilla
+  podría doblegarse hacia atrás.
+
+`confidence` **no** incluye estos cuatro puntos a propósito: en una exhibición la
+cámara suele cortar los pies, y promediarlos congelaría el avatar entero por un
+encuadre cerrado.
+
+El cliente estima la escala con la longitud de pierna del sujeto (suma de muslo y
+pantorrilla, invariante a la pose) y mueve la cadera en vertical usando el tobillo
+de apoyo como referencia absoluta. Ver `docs/specs/2026-11-03-piernas-ik-design.md`.
 
 Contradicción conocida: el ejemplo de `AGENTS.md` §3 muestra `"nose": [0.0, 1.65, 0.1]`,
 que corresponde a altura absoluta y contradice el texto "relativas a la cadera".
@@ -142,6 +160,7 @@ rotaciones de huesos del rig Mixamo, **con swap de lados deliberado**:
 | `bones` | Hueso del avatar |
 |---|---|
 | `hips_side` | `mixamorigHips` (base con el +Y del mundo) |
+| `landmarks.left_ankle` / `right_ankle` | `mixamorigLeftLeg` + `LeftFoot` / par derecho (IK) |
 | `torso_up` + `torso_side` | `mixamorigSpine` (base ortonormal: inclinación + giro) |
 | `head` | `mixamorigNeck` |
 | `right_upper_arm` / `right_lower_arm` | `mixamorigLeftArm` / `mixamorigLeftForeArm` |

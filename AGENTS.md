@@ -55,7 +55,11 @@ El backend transmitirá paquetes en formato JSON en cada cuadro procesado. Para 
     "left_wrist": [-0.5, 0.85, 0.1],
     "right_wrist": [0.5, 0.85, 0.1],
     "left_hip": [-0.15, 0.9, 0.0],
-    "right_hip": [0.15, 0.9, 0.0]
+    "right_hip": [0.15, 0.9, 0.0],
+    "left_knee": [-0.16, 0.45, 0.02],
+    "right_knee": [0.16, 0.45, 0.02],
+    "left_ankle": [-0.17, 0.05, 0.0],
+    "right_ankle": [0.17, 0.05, 0.0]
   },
   "landmarks_2d": {
     "nose": [0.50, 0.22],
@@ -66,7 +70,11 @@ El backend transmitirá paquetes en formato JSON en cada cuadro procesado. Para 
     "left_wrist": [0.68, 0.62],
     "right_wrist": [0.32, 0.62],
     "left_hip": [0.56, 0.70],
-    "right_hip": [0.44, 0.70]
+    "right_hip": [0.44, 0.70],
+    "left_knee": [0.57, 0.82],
+    "right_knee": [0.43, 0.82],
+    "left_ankle": [0.58, 0.95],
+    "right_ankle": [0.42, 0.95]
   },
   "bones": {
     "right_upper_arm": [0.82, -0.57, 0.0],
@@ -151,9 +159,11 @@ Las siguientes características y ajustes **no deben implementarse en el arranqu
   - *Paso 1 (hecho):* rotación de cadera con `hips_side` (giro + inclinación).
     Piernas rígidas respecto de la pelvis; el avatar no se traslada. Queda un
     patinaje angular leve porque la pelvis pivota sobre su punto.
-  - *Paso 2 (pendiente):* articular muslos y pantorrillas y decidir si se agrega
-    IK de dos huesos para clavar el pie de apoyo. Variables a definir: detección
-    del pie de apoyo, altura del avatar y tolerancia de deslizamiento.
+  - *Paso 2 (hecho):* muslos y pantorrillas con IK de dos huesos. El pie de apoyo
+    (el tobillo más bajo, con histéresis de 3 frames) se clava al piso y su XZ se
+    congela; la cadera se mueve en vertical con la altura del sujeto. Sin
+    desplazamiento horizontal: si el sujeto camina, el avatar da pasos en el lugar.
+    Ver `docs/specs/2026-11-03-piernas-ik-design.md`.
 * **Entorno visual y dirección de arte:**
   - *Cuándo decidir:* Una vez que la cinemática funcione con precisión.
   - *Variables a definir:* Tipo de iluminación (sombras dinámicas vs. luces básicas), textura del escenario, efectos de partículas o estilo visual del avatar.
