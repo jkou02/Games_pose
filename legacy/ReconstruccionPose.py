@@ -29,11 +29,13 @@ plt.grid(True)
 POSE_CONNECTIONS = mp_pose.POSE_CONNECTIONS
 
 # --- Captura de video y procesamiento ---
-ipcam = "192.168.2.26"
-url = os.getenv(
-    "RTSP_URL",
-    f"rtsp://admin:placa123@{ipcam}:554/snl/live/1/1",
-)
+url = os.getenv("RTSP_URL")
+if not url:
+    raise SystemExit(
+        "Definí RTSP_URL. Ejemplo:\n"
+        "  RTSP_URL='rtsp://usuario:clave@192.168.2.26:554/snl/live/1/1' \\\n"
+        "  .venv/bin/python legacy/ReconstruccionPose.py"
+    )
 cap = cv2.VideoCapture(url)
 # cap = cv2.VideoCapture(0) # Inicia la captura de la cámara web
 

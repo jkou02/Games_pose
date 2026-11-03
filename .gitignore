@@ -2,7 +2,9 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.ruff_cache/
 node_modules/
-frontend/dist/
+legacy/frontend-vite/dist/
 *.log
 .DS_Store
+animados/
