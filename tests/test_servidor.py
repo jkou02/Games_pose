@@ -43,15 +43,21 @@ def test_listado_de_personajes_incluye_el_bot():
     )
 
 
+ARCHIVOS_VENDOR = [
+    "/static/vendor/three/three.module.js",
+    "/static/vendor/three/three.core.js",
+    "/static/vendor/three/addons/loaders/FBXLoader.js",
+    "/static/vendor/three/addons/controls/OrbitControls.js",
+    "/static/vendor/three/addons/libs/fflate.module.js",
+    "/static/vendor/three/addons/curves/NURBSCurve.js",
+    "/static/vendor/three/addons/curves/NURBSUtils.js",
+]
+
+
 def test_static_vendor_se_sirve():
-    vendor = (
-        pathlib.Path(__file__).resolve().parent.parent / "static" / "vendor" / "three"
-    )
-    if not (vendor / "three.module.js").is_file():
-        pytest.skip("vendor todavía no generado")
-    assert (
-        app.test_client().get("/static/vendor/three/three.module.js").status_code == 200
-    )
+    client = app.test_client()
+    for ruta in ARCHIVOS_VENDOR:
+        assert client.get(ruta).status_code == 200, ruta
 
 
 def test_la_app_no_depende_de_internet():
