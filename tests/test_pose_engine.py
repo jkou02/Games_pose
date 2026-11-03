@@ -1,6 +1,7 @@
 import numpy as np
 
 from backend.pose_engine import PoseEngine
+from backend.smoothing import PoseSmoother
 
 FRAME = np.zeros((48, 64, 3), dtype=np.uint8)
 
@@ -52,9 +53,10 @@ def pose_de_pie():
     return Landmarks(world), Landmarks(image)
 
 
-def motor(resultados, min_confidence: float = 0.5) -> PoseEngine:
+def motor(resultados, min_confidence: float = 0.5, smooth: bool = True) -> PoseEngine:
     engine = object.__new__(PoseEngine)
     engine.min_confidence = min_confidence
+    engine._smoother = PoseSmoother() if smooth else None
     engine._pose = PoseFalsa(resultados)
     return engine
 
@@ -106,3 +108,23 @@ def test_confidence_ignora_el_tren_inferior():
     payload = motor(Resultados(world, image)).process(FRAME)
     assert payload["detected"] is True
     assert payload["confidence"] > 0.5
+
+
+def test_el_filtro_amortigua_un_cambio_brusco():
+    world, image = pose_de_pie()
+    engine = motor(Resultados(world, image))
+    primero = engine.process(FRAME)
+    # Solo la nariz: desplazar todos los puntos no cambia nada, porque el
+    # payload se centra en la cadera.
+    world.landmark[0].x += 0.5
+    segundo = engine.process(FRAME)
+    # El desplazamiento filtrado es parcial: no salta los 50 cm completos.
+    salto = abs(segundo["landmarks"]["nose"][0] - primero["landmarks"]["nose"][0])
+    assert 0.0 < salto < 0.5
+
+
+def test_sin_suavizado_el_payload_es_crudo():
+    world, image = pose_de_pie()
+    engine = motor(Resultados(world, image), smooth=False)
+    payload = engine.process(FRAME)
+    assert payload["landmarks"]["left_ankle"] == [-0.10, 0.90, 0.0]

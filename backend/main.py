@@ -32,6 +32,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-fps", type=float, default=60.0, help="Tope de difusión")
     parser.add_argument("--model-complexity", type=int, choices=(0, 1, 2), default=1)
     parser.add_argument("--min-confidence", type=float, default=0.5)
+    parser.add_argument(
+        "--no-smooth", action="store_true", help="Desactiva el filtro de suavizado"
+    )
+    parser.add_argument(
+        "--min-cutoff", type=float, default=1.0, help="Hz de corte en reposo"
+    )
+    parser.add_argument(
+        "--beta", type=float, default=0.05, help="Adaptación a la velocidad"
+    )
+    parser.add_argument(
+        "--d-cutoff", type=float, default=1.0, help="Hz del estimador de velocidad"
+    )
     parser.add_argument("--log-level", default="INFO")
     return parser
 
@@ -48,7 +60,13 @@ async def run(args: argparse.Namespace) -> int:
         return 1
 
     engine = await asyncio.to_thread(
-        PoseEngine, args.min_confidence, args.model_complexity
+        PoseEngine,
+        args.min_confidence,
+        args.model_complexity,
+        args.min_cutoff,
+        args.beta,
+        args.d_cutoff,
+        not args.no_smooth,
     )
     broadcaster = Broadcaster()
     min_interval = 1.0 / args.max_fps if args.max_fps > 0 else 0.0

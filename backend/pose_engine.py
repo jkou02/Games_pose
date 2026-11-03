@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -13,13 +15,25 @@ from backend.kinematics import (
     normalize_landmarks,
 )
 from backend.schema import build_payload, empty_payload
+from backend.smoothing import PoseSmoother
 
 
 class PoseEngine:
     """Procesa frames BGR y devuelve payloads listos para difundir."""
 
-    def __init__(self, min_confidence: float = 0.5, model_complexity: int = 1) -> None:
+    def __init__(
+        self,
+        min_confidence: float = 0.5,
+        model_complexity: int = 1,
+        min_cutoff: float = 1.0,
+        beta: float = 0.05,
+        d_cutoff: float = 1.0,
+        smooth: bool = True,
+    ) -> None:
         self.min_confidence = min_confidence
+        self._smoother = (
+            PoseSmoother(min_cutoff, beta, d_cutoff) if smooth else None
+        )
         self._pose = mp.solutions.pose.Pose(
             static_image_mode=False,
             model_complexity=model_complexity,
@@ -45,6 +59,8 @@ class PoseEngine:
         results = self._pose.process(rgb)
 
         if not results.pose_world_landmarks:
+            if self._smoother:
+                self._smoother.reset()
             return empty_payload()
 
         raw = results.pose_world_landmarks.landmark
@@ -52,15 +68,25 @@ class PoseEngine:
         confidence = float(np.mean(visibility)) if visibility else 0.0
 
         if confidence < self.min_confidence:
+            if self._smoother:
+                self._smoother.reset()
             return empty_payload()
 
+        ahora = time.perf_counter()
         points = normalize_landmarks(raw)
+        landmarks_2d = self._landmarks_2d(results.pose_landmarks)
+        if self._smoother:
+            # Se filtra antes de los huesos: así salen de las mismas posiciones
+            # suavizadas y el payload queda coherente.
+            points = self._smoother.apply("3d", points, ahora)
+            landmarks_2d = self._smoother.apply("2d", landmarks_2d, ahora)
+
         bones = compute_bones(points)
         return build_payload(
             points,
             bones,
             confidence,
-            landmarks_2d=self._landmarks_2d(results.pose_landmarks),
+            landmarks_2d=landmarks_2d,
         )
 
     def close(self) -> None:
