@@ -153,8 +153,10 @@ Las siguientes características y ajustes **no deben implementarse en el arranqu
 > **Nota para agentes y desarrolladores:** Antes de escribir código para cualquiera de los siguientes puntos, se debe pausar y acordar los parámetros y la estrategia técnica específica con el usuario.
 
 * **Parámetros del filtro de suavizado (One Euro Filter / EMA):**
-  - *Cuándo decidir:* Al finalizar la Fase 4, probando en vivo frente a la cámara web física.
-  - *Variables a definir:* Frecuencia de corte mínima (`min_cutoff`) y coeficiente de velocidad (`beta`).
+  - *Definido:* `min_cutoff = 1.0`, `beta = 0.05`, `d_cutoff = 1.0`, ajustables por
+    CLI (`--min-cutoff`, `--beta`, `--d-cutoff`; `--no-smooth` lo apaga). Se filtra
+    en el backend antes de calcular los huesos.
+  - *Pendiente:* afinar los tres valores con la cámara física de la exhibición.
 * **Seguimiento de piernas y anclaje al suelo (*Foot IK / Grounding*):**
   - *Paso 1 (hecho):* rotación de cadera con `hips_side` (giro + inclinación).
     Piernas rígidas respecto de la pelvis; el avatar no se traslada. Queda un

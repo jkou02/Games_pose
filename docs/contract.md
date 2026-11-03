@@ -123,6 +123,10 @@ torso. Un solo vector vertical no distingue el giro alrededor de su propio eje: 
 el cliente mapea únicamente `torso_up`, el torso se queda rígido cuando la persona
 gira los hombros sin inclinarse.
 
+Las posiciones llegan **ya filtradas** (One Euro; `--min-cutoff`, `--beta` y
+`--d-cutoff` en el backend). `bones` se deriva de esas mismas posiciones, así que
+es coherente con `landmarks`. Con `--no-smooth` el payload sale crudo.
+
 ### `landmarks_2d`
 
 Coordenadas normalizadas de la imagen original de la cámara (0..1, origen arriba a

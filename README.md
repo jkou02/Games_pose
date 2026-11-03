@@ -69,6 +69,10 @@ Queda escuchando en `ws://127.0.0.1:8765`.
 | `--max-fps` | `60` | Tope de difusión por segundo |
 | `--model-complexity` | `1` | `0` = lite (más rápido), `2` = heavy (más preciso) |
 | `--min-confidence` | `0.5` | Debajo de esto se emite `detected: false` |
+| `--no-smooth` | — | Desactiva el filtro de suavizado |
+| `--min-cutoff` | `1.0` | Hz de corte en reposo (más bajo = más suave y con más lag) |
+| `--beta` | `0.05` | Cuánto se abre el filtro al moverse |
+| `--d-cutoff` | `1.0` | Hz del estimador de velocidad |
 
 ### 2. App web
 
