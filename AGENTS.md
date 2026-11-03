@@ -61,13 +61,15 @@ El backend transmitirá paquetes en formato JSON en cada cuadro procesado. Para 
     "right_lower_arm": [0.15, -0.98, 0.1],
     "left_upper_arm": [-0.82, -0.57, 0.0],
     "left_lower_arm": [-0.15, -0.98, 0.1],
-    "torso_up": [0.0, 1.0, 0.0]
+    "torso_up": [0.0, 1.0, 0.0],
+    "head": [0.0, 0.55, 0.83]
   }
 }
 ```
 
 * `landmarks`: Coordenadas métricas $(X, Y, Z)$ relativas a la cadera en el sistema de coordenadas de Three.js.
 * `bones`: Vectores unitarios normalizados $(\Delta X, \Delta Y, \Delta Z)$ de cada segmento óseo, calculados en el backend para aligerar la carga matemática del cliente web.
+  `torso_up` va del centro de cadera al centro de hombros y `head` del centro de hombros a la nariz.
 
 ---
 

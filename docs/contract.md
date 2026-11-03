@@ -34,6 +34,10 @@ detectada:
 }
 ```
 
+> El ejemplo se capturó antes de agregar `bones.head`. El backend ahora emite
+> también ese campo (vector centro de hombros → nariz), así que `bones` tiene 6
+> entradas.
+
 ## Campos
 
 | Campo | Tipo | Descripción |
@@ -42,7 +46,7 @@ detectada:
 | `detected` | bool | `false` si no hay persona o la confianza es menor a `--min-confidence`. |
 | `confidence` | float | Promedio de `visibility` de los 9 landmarks del contrato, 3 decimales. |
 | `landmarks` | objeto | 9 puntos, coordenadas `[x, y, z]` en metros. |
-| `bones` | objeto | 5 vectores unitarios `[x, y, z]`. |
+| `bones` | objeto | 6 vectores unitarios `[x, y, z]`. |
 
 ### `landmarks`
 
@@ -84,6 +88,7 @@ Vectores unitarios (`norma == 1.0`) que apuntan del origen al destino del segmen
 | `left_upper_arm` | `left_shoulder` | `left_elbow` |
 | `left_lower_arm` | `left_elbow` | `left_wrist` |
 | `torso_up` | centro de cadera | centro de hombros |
+| `head` | centro de hombros | `nose` |
 
 Los nombres `left_*` / `right_*` son siempre desde el punto de vista del sujeto.
 
@@ -106,10 +111,23 @@ El cliente debe interpolar suavemente hacia la pose neutra. No debe congelar la
 Payload medido: **~620 bytes** por frame (JSON compacto, sin espacios, 4 decimales).
 A 30 FPS son ~18 KB/s por cliente.
 
-## Decisiones pendientes antes de la Fase 4
+## Mapeo a huesos Mixamo
 
-- El contrato **no incluye** un hueso de cabeza, pero la Fase 4 necesita rotar
-  `mixamorig:Head`. Hay que acordar si se agrega `head` a `bones`
-  (vector `nose` menos centro de hombros) o si el cliente lo deriva.
-- Aún no hay mapeo de rotaciones a huesos Mixamo; el avatar placeholder no tiene
-  esqueleto, así que `bones` se recibe pero no se aplica.
+El consumidor actual es `static/js/app.js`. Traduce los vectores de `bones` a
+rotaciones de huesos del rig Mixamo, **con swap de lados deliberado**:
+
+| `bones` | Hueso del avatar |
+|---|---|
+| `torso_up` | `mixamorigSpine` |
+| `head` | `mixamorigNeck` |
+| `right_upper_arm` / `right_lower_arm` | `mixamorigLeftArm` / `mixamorigLeftForeArm` |
+| `left_upper_arm` / `left_lower_arm` | `mixamorigRightArm` / `mixamorigRightForeArm` |
+
+El swap es obligatorio: el backend ya espeja X y el video también está espejado por
+CSS, así que el brazo que el público ve a la derecha corresponde al hueso izquierdo
+del avatar (que es el que se dibuja a la derecha de la pantalla). Un cliente que
+mapee los nombres sin invertir mostrará el avatar con los brazos cruzados.
+
+Sólo se rotan huesos: nunca se modifica `position` de articulaciones hijas
+(`AGENTS.md` §7). El anclaje de cadera se aplica una única vez al cargar el modelo.
+

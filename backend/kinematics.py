@@ -83,6 +83,9 @@ def compute_bones(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     hip_mid = (points["left_hip"] + points["right_hip"]) / 2.0
     shoulder_mid = (points["left_shoulder"] + points["right_shoulder"]) / 2.0
     bones["torso_up"] = unit(shoulder_mid - hip_mid)
+    # Cabeza: del centro de hombros a la nariz. Lo necesita el avatar para
+    # rotar el cuello (Mixamo `Neck`); no estaba en el contrato original.
+    bones["head"] = unit(points["nose"] - shoulder_mid)
     return bones
 
 

@@ -77,6 +77,16 @@ def test_bones_are_unit_vectors_with_expected_direction():
     assert bones["right_upper_arm"][0] == pytest.approx(1.0, abs=1e-6)
 
 
+def test_head_bone_apunta_del_centro_de_hombros_a_la_nariz():
+    points = normalize_landmarks(make_landmarks())
+    bones = compute_bones(points)
+    assert set(bones) == set(BONE_DEFINITIONS) | {"torso_up", "head"}
+    head = bones["head"]
+    assert np.linalg.norm(head) == pytest.approx(1.0, abs=1e-6)
+    # La nariz está por encima del centro de hombros en el fixture
+    assert head[1] > 0.5
+
+
 def test_unit_handles_zero_vector_without_nan():
     vec = unit(np.zeros(3))
     assert np.allclose(vec, 0.0)
