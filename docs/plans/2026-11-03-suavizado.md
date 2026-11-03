@@ -440,3 +440,45 @@ tests de la Task 1.
 **Consistencia:** `PoseSmoother.apply(grupo, datos, timestamp)` y `reset()` se usan
 con la misma firma en el motor; los nombres de flags coinciden entre `main.py`,
 README y `AGENTS.md`.
+
+---
+
+## Estado de ejecución
+
+Ejecutado el 2026-11-03. Las 4 tasks completas.
+
+| Task | Commit | Verificación |
+|---|---|---|
+| 1 — Módulo de filtrado | `f813ded` | 7 tests: ruido, FPS, reset, dt nulo, grupos |
+| 2 — Motor y CLI | `0c61f53` | 41 tests; flags verificados por CLI |
+| 3 — Documentación | `a720ff1` | contrato, README y `AGENTS.md` §6 |
+| 4 — Verificación | — | backend arranca y difunde; ver nota |
+
+### Resultado de la verificación con cámara
+
+El backend abre `/dev/video0` y difunde a ~16 FPS, pero **no había persona frente a
+la cámara** en este entorno (`detectado 0/100` en todas las ventanas de log). Por
+eso la comparación visual con filtro activo/apagado queda pendiente del usuario.
+
+Verificado en cambio:
+
+```
+defaults: no_smooth=False, min_cutoff=1.0, beta=0.05, d_cutoff=1.0
+custom  : --no-smooth --min-cutoff 0.5 --beta 0.1 --d-cutoff 2  → aplicados
+```
+
+El amortiguado del filtro sobre una señal con ruido y sobre un salto brusco está
+cubierto por tests (`test_smoothing.py`, `test_pose_engine.py`).
+
+### Cómo afinar (pendiente del usuario)
+
+Con la app abierta y una persona frente a la cámara, comparar dos corridas:
+
+```bash
+.venv/bin/python -m backend.main --source 0            # con filtro
+.venv/bin/python -m backend.main --source 0 --no-smooth  # sin filtro
+```
+
+- Queda temblor en reposo → bajar `--min-cutoff` (por ejemplo `0.5`).
+- Los gestos rápidos se sienten con retardo → subir `--beta` (por ejemplo `0.1`).
+- Registrar los valores finales en `AGENTS.md` §6.
