@@ -844,6 +844,18 @@ function iniciarVideoLocal() {
     const videoEl = document.getElementById('video-entrada');
     if (!videoEl) return;
 
+    // La vista previa del navegador compite con el backend por la misma cámara
+    // (V4L2 es de acceso exclusivo). Por defecto está apagada: el seguimiento
+    // lo hace el backend. Se activa con ?preview=1 cuando hay otra cámara libre.
+    const habilitada = new URLSearchParams(location.search).get('preview') === '1';
+    const aviso = document.getElementById('aviso-preview');
+    if (!habilitada) {
+        aviso?.classList.remove('oculto');
+        console.info('Vista previa desactivada. Usá ?preview=1 para ver la cámara.');
+        return;
+    }
+    aviso?.classList.add('oculto');
+
     if (!navigator.mediaDevices?.getUserMedia) {
         console.info('Cámara local no disponible: requiere localhost o HTTPS.');
         return;
@@ -1553,9 +1565,22 @@ function alinearHueso(bone, hijo, dirObjetivo, factor = 1) {
  * Devuelve null si falta algún punto o si la distancia es implausible.
  */
 function pieDelPayload(ladoPayload, landmarks) {
+    const tobillo = landmarks?.[`${ladoPayload}_ankle`];
     const talon = landmarks?.[`${ladoPayload}_heel`];
     const punta = landmarks?.[`${ladoPayload}_foot_index`];
-    if (!talon || !punta) return null;
+    if (!tobillo || !talon || !punta) return null;
+
+    // Datos imposibles: MediaPipe estima mal los pies cuando la confianza baja.
+    // Un pie por encima del centro de cadera, o alejado del tobillo, no es un
+    // pie. Sin este filtro el avatar gira el pie a cualquier lado.
+    if (talon[1] > 0 || punta[1] > 0) return null;
+    const cercaDelTobillo = (punto) =>
+        Math.hypot(
+            punto[0] - tobillo[0],
+            punto[1] - tobillo[1],
+            punto[2] - tobillo[2],
+        ) <= 0.35;
+    if (!cercaDelTobillo(talon) || !cercaDelTobillo(punta)) return null;
 
     const v = new THREE.Vector3(
         punta[0] - talon[0],
