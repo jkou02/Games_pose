@@ -1,0 +1,146 @@
+# Directrices de Desarrollo - MoCap Avatar 3D en Tiempo Real
+
+## 1. Objetivo del Proyecto
+Construir un sistema de captura de movimiento en tiempo real (*markerless motion capture*) para demostración interactiva al público en general. La aplicación capturará el movimiento corporal de una persona frente a una cámara web mediante MediaPipe y animará simultáneamente un avatar 3D con baja latencia y alta fluidez visual en un navegador web.
+
+---
+
+## 2. Stack Tecnológico y Arquitectura
+
+Se adopta una **arquitectura desacoplada (Productor - Consumidor)**:
+
+```
+[ Cámara Web ]
+      │
+      ▼
+[ Backend: Python ]
+  ├── OpenCV (Captura de frames)
+  ├── MediaPipe Pose (`pose_world_landmarks`)
+  ├── Normalización y conversión de coordenadas
+  └── Servidor WebSocket local (`asyncio` + `websockets`)
+      │
+      │  JSON vía ws://127.0.0.1:8765 (30-60 FPS)
+      ▼
+[ Frontend: Web / Three.js ]
+  ├── Cliente WebSocket
+  ├── Motor de render Three.js (HTML5 / Vanilla JS o Vite)
+  ├── Gestor de avatar (Loader `.glb` / `.gltf`)
+  └── Solver cinemático (Mapeo de rotaciones a huesos Mixamo)
+```
+
+* **Backend:** Python 3.10+ con `opencv-python` y `mediapipe`.
+* **Canal de Transporte:** WebSocket local bidireccional/broadcast (puerto por defecto: `8765`). Se elige WebSocket sobre UDP simple por su compatibilidad nativa inmediata con APIs de navegador sin proxys ni pasarelas intermedias.
+* **Frontend:** Three.js sobre navegador web moderno con aceleración por hardware.
+* **Formato 3D:** Modelos estándar `.glb` / `.gltf` con esqueleto humanoide (*rig*) bajo convención de nombres **Mixamo**.
+
+---
+
+## 3. Contrato de Datos (Payload Schema)
+
+El backend transmitirá paquetes en formato JSON en cada cuadro procesado. Para mantener el ancho de banda y el parseo ultraligeros, el contrato define puntos de referencia espaciales y vectores directores ya calculados.
+
+### Schema JSON estándar:
+```json
+{
+  "timestamp": 1730650000.123,
+  "detected": true,
+  "confidence": 0.92,
+  "landmarks": {
+    "nose": [0.0, 1.65, 0.1],
+    "left_shoulder": [-0.2, 1.4, 0.0],
+    "right_shoulder": [0.2, 1.4, 0.0],
+    "left_elbow": [-0.45, 1.15, 0.05],
+    "right_elbow": [0.45, 1.15, 0.05],
+    "left_wrist": [-0.5, 0.85, 0.1],
+    "right_wrist": [0.5, 0.85, 0.1],
+    "left_hip": [-0.15, 0.9, 0.0],
+    "right_hip": [0.15, 0.9, 0.0]
+  },
+  "bones": {
+    "right_upper_arm": [0.82, -0.57, 0.0],
+    "right_lower_arm": [0.15, -0.98, 0.1],
+    "left_upper_arm": [-0.82, -0.57, 0.0],
+    "left_lower_arm": [-0.15, -0.98, 0.1],
+    "torso_up": [0.0, 1.0, 0.0]
+  }
+}
+```
+
+* `landmarks`: Coordenadas métricas $(X, Y, Z)$ relativas a la cadera en el sistema de coordenadas de Three.js.
+* `bones`: Vectores unitarios normalizados $(\Delta X, \Delta Y, \Delta Z)$ de cada segmento óseo, calculados en el backend para aligerar la carga matemática del cliente web.
+
+---
+
+## 4. Convención de Sistemas de Coordenadas
+
+Para evitar discrepancias donde el avatar quede invertido o mirando hacia el lado contrario, se fija la transformación estándar desde el backend:
+
+### Espacio MediaPipe (`pose_world_landmarks`)
+* Origen $(0, 0, 0)$: Centro de la cadera del sujeto.
+* Eje $+X$: Hacia la derecha del usuario.
+* Eje $+Y$: Hacia abajo (gravedad invertida respecto al estándar 3D).
+* Eje $+Z$: Hacia adelante / alejándose de la cámara.
+
+### Espacio Three.js (Mundo 3D)
+* Origen $(0, 0, 0)$: Centro del escenario / base del avatar.
+* Eje $+X$: Hacia la derecha de la pantalla.
+* Eje $+Y$: Hacia arriba.
+* Eje $+Z$: Hacia afuera de la pantalla (hacia el usuario que observa).
+
+### Regla de Transformación Obligatoria (en Backend):
+```python
+x_3d = -x_mediapipe  # Invierte eje horizontal para efecto espejo natural
+y_3d = -y_mediapipe  # Invierte vertical para que +Y sea hacia arriba
+z_3d = -z_mediapipe  # Profundidad alineada con la mirada del avatar
+```
+
+---
+
+## 5. Fases de Implementación (Orden Estricto)
+
+El desarrollo debe realizarse de forma secuencial y verificable por hitos:
+
+1. **Fase 1: Captura y Normalización (Backend)**
+   - Script Python que captura webcam a 30+ FPS.
+   - Extracción de `pose_world_landmarks` y cálculo de vectores directores.
+   - Transformación de coordenadas al espacio Three.js.
+2. **Fase 2: Servidor de Difusión (Backend)**
+   - Loop asíncrono con `asyncio` y `websockets`.
+   - Serialización JSON según el contrato de datos.
+3. **Fase 3: Escena Base y Conexión (Frontend)**
+   - Canvas Three.js con iluminación básica, piso y cámara configurada.
+   - Carga de un avatar `.glb` humanoide en Pose T.
+   - Cliente WebSocket que recibe paquetes y muestra estado de conexión en pantalla.
+4. **Fase 4: Mapeo de Huesos y Cinemática (Frontend)**
+   - Mapeo de vectores directores a cuaterniones locales de los huesos principales del tren superior (`mixamorig:RightArm`, `mixamorig:RightForeArm`, `mixamorig:LeftArm`, `mixamorig:LeftForeArm`, `mixamorig:Head`).
+   - Aplicación estricta de rotación local sin alterar posiciones para proteger la integridad de la malla.
+5. **Fase 5: Integración y Estabilización**
+   - Incorporación del filtro de suavizado temporal para suprimir el temblor (*jitter*).
+   - Inserción de ventana PiP (*Picture-in-Picture*) con el feed de video y el esqueleto superpuesto para retroalimentación visual al público.
+
+---
+
+## 6. Decisiones Técnicas Postergadas
+
+Las siguientes características y ajustes **no deben implementarse en el arranque**. Deberán discutirse, evaluarse y definirse puntualmente al comenzar la fase que las requiera:
+
+> **Nota para agentes y desarrolladores:** Antes de escribir código para cualquiera de los siguientes puntos, se debe pausar y acordar los parámetros y la estrategia técnica específica con el usuario.
+
+* **Parámetros del filtro de suavizado (One Euro Filter / EMA):**
+  - *Cuándo decidir:* Al finalizar la Fase 4, probando en vivo frente a la cámara web física.
+  - *Variables a definir:* Frecuencia de corte mínima (`min_cutoff`) y coeficiente de velocidad (`beta`).
+* **Seguimiento de piernas y anclaje al suelo (*Foot IK / Grounding*):**
+  - *Cuándo decidir:* Al evaluar la Fase 5.
+  - *Alternativa base inicial:* El avatar se mantendrá fijo de la cadera hacia abajo para evitar deslizamientos irreales en el piso (*foot sliding*).
+* **Entorno visual y dirección de arte:**
+  - *Cuándo decidir:* Una vez que la cinemática funcione con precisión.
+  - *Variables a definir:* Tipo de iluminación (sombras dinámicas vs. luces básicas), textura del escenario, efectos de partículas o estilo visual del avatar.
+* **Seguimiento fino de manos y rostro:**
+  - *Cuándo decidir:* Solo si el rendimiento de hardware de la máquina de exhibición permite correr MediaPipe Holistic a 60 FPS estables sin caídas de cuadros.
+
+---
+
+## 7. Reglas de Calidad para Agentes de Código
+* **Latencia primero:** No añadir librerías pesadas ni cálculos de deep learning adicionales que eleven el tiempo total de respuesta por encima de 100 ms.
+* **Prohibido estirar la malla:** Nunca modificar la posición (`position`) de articulaciones hijas; solo se modifican rotaciones (`quaternion` o `rotation`).
+* **Resiliencia ante pérdida de tracking:** Si la persona sale del cuadro (`detected: false`), el avatar debe interpolar suavemente de regreso a su pose de reposo neutra en lugar de congelarse en poses extrañas o deformadas.
