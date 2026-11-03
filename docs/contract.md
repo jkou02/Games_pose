@@ -45,8 +45,8 @@ detectada:
 | `timestamp` | float | Segundos desde epoch, 3 decimales. |
 | `detected` | bool | `false` si no hay persona o la confianza es menor a `--min-confidence`. |
 | `confidence` | float | Promedio de `visibility` de los 9 puntos del tren superior, 3 decimales. |
-| `landmarks` | objeto | 13 puntos, coordenadas `[x, y, z]` en metros. |
-| `landmarks_2d` | objeto | 13 puntos, coordenadas normalizadas `[x, y]` de la imagen (0..1). |
+| `landmarks` | objeto | 17 puntos, coordenadas `[x, y, z]` en metros. |
+| `landmarks_2d` | objeto | 17 puntos, coordenadas normalizadas `[x, y]` de la imagen (0..1). |
 | `bones` | objeto | 8 vectores unitarios `[x, y, z]`. |
 
 ### `landmarks`
@@ -72,7 +72,8 @@ frontend **no** debe aplicar `scale.x = -1` ni espejar la cámara.
 
 Claves: `nose`, `left_shoulder`, `right_shoulder`, `left_elbow`, `right_elbow`,
 `left_wrist`, `right_wrist`, `left_hip`, `right_hip`, `left_knee`, `right_knee`,
-`left_ankle`, `right_ankle`.
+`left_ankle`, `right_ankle`, `left_heel`, `right_heel`, `left_foot_index`,
+`right_foot_index`.
 
 ### Tren inferior
 
@@ -126,6 +127,23 @@ gira los hombros sin inclinarse.
 Las posiciones llegan **ya filtradas** (One Euro; `--min-cutoff`, `--beta` y
 `--d-cutoff` en el backend). `bones` se deriva de esas mismas posiciones, así que
 es coherente con `landmarks`. Con `--no-smooth` el payload sale crudo.
+
+### Pie
+
+`left_heel` / `right_heel` y `left_foot_index` / `right_foot_index` definen la
+dirección del pie, `talón → punta`:
+
+- **Pitch:** `asin(−forward.y)`. Positivo con la punta abajo (puntas), negativo con
+  la punta arriba (apoyo de talón).
+- **Yaw:** ángulo del pie respecto del frente del cuerpo, que se deriva de
+  `hips_side`. Es relativo, así que no depende de cómo esté ubicada la persona.
+- **Contacto:** en puntas el cliente sube el tobillo
+  `largoPie · (sin(θreposo + pitch) − sin(θreposo))` para que la punta quede en el
+  piso en lugar de hundirse.
+
+El **roll no se deriva**: talón, tobillo y punta son casi colineales y no definen un
+plano. Si faltan estos puntos o la distancia entre talón y punta es implausible
+(< 0,05 m o > 0,5 m), el cliente deja el pie plano.
 
 ### `landmarks_2d`
 

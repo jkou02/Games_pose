@@ -59,7 +59,11 @@ El backend transmitirá paquetes en formato JSON en cada cuadro procesado. Para 
     "left_knee": [-0.16, 0.45, 0.02],
     "right_knee": [0.16, 0.45, 0.02],
     "left_ankle": [-0.17, 0.05, 0.0],
-    "right_ankle": [0.17, 0.05, 0.0]
+    "right_ankle": [0.17, 0.05, 0.0],
+    "left_heel": [-0.17, 0.02, -0.08],
+    "right_heel": [0.17, 0.02, -0.08],
+    "left_foot_index": [-0.17, 0.02, 0.18],
+    "right_foot_index": [0.17, 0.02, 0.18]
   },
   "landmarks_2d": {
     "nose": [0.50, 0.22],
@@ -74,7 +78,11 @@ El backend transmitirá paquetes en formato JSON en cada cuadro procesado. Para 
     "left_knee": [0.57, 0.82],
     "right_knee": [0.43, 0.82],
     "left_ankle": [0.58, 0.95],
-    "right_ankle": [0.42, 0.95]
+    "right_ankle": [0.42, 0.95],
+    "left_heel": [0.58, 0.98],
+    "right_heel": [0.42, 0.98],
+    "left_foot_index": [0.60, 0.99],
+    "right_foot_index": [0.40, 0.99]
   },
   "bones": {
     "right_upper_arm": [0.82, -0.57, 0.0],
@@ -166,6 +174,11 @@ Las siguientes características y ajustes **no deben implementarse en el arranqu
     congela; la cadera se mueve en vertical con la altura del sujeto. Sin
     desplazamiento horizontal: si el sujeto camina, el avatar da pasos en el lugar.
     Ver `docs/specs/2026-11-03-piernas-ik-design.md`.
+* **Orientación de pie:**
+  - *Hecho:* pitch y yaw del pie desde talón y punta, con compensación de altura
+    en puntas para que no atraviese el piso.
+  - *Pendiente:* roll (no derivable con los puntos actuales, hacen falta puntos
+    laterales del pie) y hueso de talón (el modelo no lo tiene).
 * **Entorno visual y dirección de arte:**
   - *Cuándo decidir:* Una vez que la cinemática funcione con precisión.
   - *Variables a definir:* Tipo de iluminación (sombras dinámicas vs. luces básicas), textura del escenario, efectos de partículas o estilo visual del avatar.
