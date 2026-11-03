@@ -68,6 +68,7 @@ def test_procesa_frame_y_emite_contrato_completo():
         "left_lower_arm",
         "torso_up",
         "torso_side",
+        "hips_side",
         "head",
     }
     assert payload["landmarks_2d"]["nose"] == [0.5, 0.2]

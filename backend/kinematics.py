@@ -86,6 +86,8 @@ def compute_bones(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     # Eje lateral del torso: permite reconstruir el giro (yaw) que un único
     # vector vertical no puede expresar.
     bones["torso_side"] = unit(points["left_shoulder"] - points["right_shoulder"])
+    # Eje lateral de la pelvis: aporta giro e inclinación de la cadera.
+    bones["hips_side"] = unit(points["left_hip"] - points["right_hip"])
     # Cabeza: del centro de hombros a la nariz. Lo necesita el avatar para
     # rotar el cuello (Mixamo `Neck`); no estaba en el contrato original.
     bones["head"] = unit(points["nose"] - shoulder_mid)

@@ -28,6 +28,7 @@ def sample_bones():
         "torso_up": np.array([0.0, 1.0, 0.0]),
         "head": np.array([0.0, 1.0, 0.1]),
         "torso_side": np.array([-1.0, 0.0, 0.0]),
+        "hips_side": np.array([-1.0, 0.0, 0.0]),
     }
 
 
