@@ -23,6 +23,10 @@ LEFT_KNEE = 25
 RIGHT_KNEE = 26
 LEFT_ANKLE = 27
 RIGHT_ANKLE = 28
+LEFT_HEEL = 29
+RIGHT_HEEL = 30
+LEFT_FOOT_INDEX = 31
+RIGHT_FOOT_INDEX = 32
 
 #: Subconjunto del contrato: índice MediaPipe -> clave del payload.
 LANDMARK_KEYS: dict[int, str] = {
@@ -39,6 +43,10 @@ LANDMARK_KEYS: dict[int, str] = {
     RIGHT_KNEE: "right_knee",
     LEFT_ANKLE: "left_ankle",
     RIGHT_ANKLE: "right_ankle",
+    LEFT_HEEL: "left_heel",
+    RIGHT_HEEL: "right_heel",
+    LEFT_FOOT_INDEX: "left_foot_index",
+    RIGHT_FOOT_INDEX: "right_foot_index",
 }
 
 #: Puntos que definen la confianza del frame. Si la cámara corta los pies, el

@@ -41,6 +41,10 @@ def test_contract_keys_are_the_documented_ones():
         "right_knee",
         "left_ankle",
         "right_ankle",
+        "left_heel",
+        "right_heel",
+        "left_foot_index",
+        "right_foot_index",
     }
     assert set(BONE_DEFINITIONS) == {
         "right_upper_arm",
@@ -127,4 +131,10 @@ def test_landmarks_incluyen_el_tren_inferior():
     assert {"left_knee", "right_knee", "left_ankle", "right_ankle"} <= set(
         LANDMARK_KEYS.values()
     )
-    assert len(LANDMARK_KEYS) == 13
+    assert len(LANDMARK_KEYS) == 17
+
+
+def test_landmarks_incluyen_talon_y_punta():
+    assert {"left_heel", "right_heel", "left_foot_index", "right_foot_index"} <= set(
+        LANDMARK_KEYS.values()
+    )

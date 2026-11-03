@@ -50,6 +50,10 @@ def pose_de_pie():
     world[26], image[26] = Punto(-0.10, -0.45), Punto(0.42, 0.75)
     world[27], image[27] = Punto(0.10, -0.90), Punto(0.60, 0.95)
     world[28], image[28] = Punto(-0.10, -0.90), Punto(0.40, 0.95)
+    world[29], image[29] = Punto(0.10, -0.96, -0.08), Punto(0.58, 0.98)
+    world[30], image[30] = Punto(-0.10, -0.96, -0.08), Punto(0.42, 0.98)
+    world[31], image[31] = Punto(0.12, -0.96, 0.18), Punto(0.62, 0.99)
+    world[32], image[32] = Punto(-0.12, -0.96, 0.18), Punto(0.38, 0.99)
     return Landmarks(world), Landmarks(image)
 
 
@@ -83,7 +87,8 @@ def test_procesa_frame_y_emite_contrato_completo():
     assert payload["landmarks"]["left_knee"] == [-0.10, 0.45, 0.0]
     assert payload["landmarks"]["right_ankle"] == [0.10, 0.90, 0.0]
     assert payload["landmarks_2d"]["right_ankle"] == [0.4, 0.95]
-    assert len(payload["landmarks"]) == 13
+    assert payload["landmarks"]["left_heel"] == [-0.10, 0.96, 0.08]
+    assert len(payload["landmarks"]) == 17
     assert set(payload["landmarks_2d"]) == set(payload["landmarks"])
 
 
