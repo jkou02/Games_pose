@@ -1,106 +1,114 @@
-"""
-Servidor Flask para la aplicación "Imita al Muñeco"
-Sirve la interfaz web y los modelos 3D de la carpeta animados.
+"""Servidor web de la app de exhibición «Ciencias Encuentro 2026».
+
+Sirve `templates/index.html`, `static/` y los modelos `animados/`.
+La pose llega por WebSocket desde `backend.main` (ws://127.0.0.1:8765).
 """
 
-from flask import Flask, render_template, send_from_directory, jsonify
-import os
-import webbrowser
+from __future__ import annotations
+
 import threading
+import webbrowser
+from pathlib import Path
+
+from flask import Flask, jsonify, render_template, send_from_directory
+
+HOST = "0.0.0.0"
+PORT = 5000
 
 app = Flask(__name__)
 
-# Ruta base del proyecto
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-
-@app.route('/assets/animados/<path:filename>')
-def serve_animados(filename):
-    """Sirve archivos de la carpeta animados."""
-    return send_from_directory(
-        os.path.join(BASE_DIR, 'animados'),
-        filename
-    )
-
+#: Raíz del repo: servidor.py vive acá, junto a templates/, static/ y animados/.
+BASE_DIR = Path(__file__).resolve().parent
+ANIMADOS_DIR = BASE_DIR / "animados"
 
 NOMBRES_ANIMADOS = {
-    'prueba': 'Robot Humanoide 🤖',
-    'bot': 'Robot Humanoide 🤖',
-    'Cool Bannana Guy': 'Plátano Cool 🍌',
-    'Sandwich Character': 'Sándwich 🥪',
-    'Steve': 'Steve 🏃',
-    'Zombie': 'Zombie 🧟',
-    'Skeleton': 'Esqueleto ☠️',
-    'Skeleton Boy': 'Chico Calavera 💀',
-    'Alien': 'Alien 👽',
-    'Frog Man': 'Hombre Rana 🐸',
-    'Character Base': 'Robot Base 🤖',
+    "prueba": "Robot Humanoide 🤖",
+    "bot": "Robot Humanoide 🤖",
+    "Cool Bannana Guy": "Plátano Cool 🍌",
+    "Sandwich Character": "Sándwich 🥪",
+    "Steve": "Steve 🏃",
+    "Zombie": "Zombie 🧟",
+    "Skeleton": "Esqueleto ☠️",
+    "Skeleton Boy": "Chico Calavera 💀",
+    "Alien": "Alien 👽",
+    "Frog Man": "Hombre Rana 🐸",
+    "Character Base": "Robot Base 🤖",
 }
 
-
-def nombre_bonito(nombre_carpeta):
-    """Devuelve un nombre limpio y divertido para niños."""
-    if nombre_carpeta in NOMBRES_ANIMADOS:
-        return NOMBRES_ANIMADOS[nombre_carpeta]
-    return nombre_carpeta
-
-
+#: Los primeros de la lista son los que mejor siguen el movimiento.
 PRIORIDAD_PERSONAJES = [
-    'prueba',
-    'bot',
-    'Steve by Quaternius',
-    'Zombie by Quaternius',
-    'Skeleton by Quaternius',
+    "prueba",
+    "bot",
+    "Steve by Quaternius",
+    "Zombie by Quaternius",
+    "Skeleton by Quaternius",
 ]
 
 
-@app.route('/api/personajes')
+def nombre_bonito(nombre_carpeta: str) -> str:
+    """Devuelve un nombre limpio y divertido para el público."""
+    return NOMBRES_ANIMADOS.get(nombre_carpeta, nombre_carpeta)
+
+
+@app.get("/")
+def index():
+    return render_template("index.html")
+
+
+@app.get("/assets/animados/<path:filename>")
+def serve_animados(filename: str):
+    """Sirve los modelos 3D de la carpeta animados/."""
+    return send_from_directory(ANIMADOS_DIR, filename)
+
+
+@app.get("/api/personajes")
 def listar_personajes():
-    """Devuelve la lista de personajes animados, priorizando los que tienen esqueleto para imitar."""
+    """Lista los personajes con esqueleto, priorizando los que mejor imitan."""
     personajes = []
-    animados_dir = os.path.join(BASE_DIR, 'animados')
+    if not ANIMADOS_DIR.is_dir():
+        return jsonify(personajes)
 
-    if os.path.exists(animados_dir):
-        carpetas = sorted(os.listdir(animados_dir))
-        # Priorizar los modelos con esqueleto funcional
-        carpetas.sort(key=lambda c: next((i for i, p in enumerate(PRIORIDAD_PERSONAJES) if p in c), 999))
+    def prioridad(carpeta: str) -> int:
+        for indice, buscado in enumerate(PRIORIDAD_PERSONAJES):
+            if buscado in carpeta:
+                return indice
+        return len(PRIORIDAD_PERSONAJES)
 
-        for carpeta in carpetas:
-            carpeta_path = os.path.join(animados_dir, carpeta)
-            if not os.path.isdir(carpeta_path):
-                continue
-            for archivo in sorted(os.listdir(carpeta_path)):
-                if archivo.endswith('.fbx'):
-                    nombre_carpeta = carpeta.split(' by ')[0].strip()
-                    personajes.append({
-                        'id': f'animados_{carpeta}',
-                        'nombre': nombre_bonito(nombre_carpeta),
-                        'modelo': f'/assets/animados/{carpeta}/{archivo}',
-                        'tipo': 'animado',
-                    })
-                    break
+    for carpeta in sorted(ANIMADOS_DIR.iterdir(), key=lambda p: prioridad(p.name)):
+        if not carpeta.is_dir():
+            continue
+        for archivo in sorted(carpeta.iterdir()):
+            if archivo.suffix.lower() == ".fbx":
+                nombre_carpeta = carpeta.name.split(" by ")[0].strip()
+                personajes.append(
+                    {
+                        "id": f"animados_{carpeta.name}",
+                        "nombre": nombre_bonito(nombre_carpeta),
+                        "modelo": f"/assets/animados/{carpeta.name}/{archivo.name}",
+                        "tipo": "animado",
+                    }
+                )
+                break
 
     return jsonify(personajes)
 
 
-def open_browser():
-    """Abre el navegador automáticamente después de un breve retraso."""
-    webbrowser.open('http://localhost:5000')
+def open_browser() -> None:
+    webbrowser.open(f"http://localhost:{PORT}")
 
 
-if __name__ == '__main__':
+def main() -> None:
     print("=" * 60)
-    print("  🎮 IMITA AL MUÑECO - Detección de Pose para Niños")
+    print("  🎮 CIENCIAS ENCUENTRO 2026 — Muñeco 3D")
     print("=" * 60)
-    print("  Modelos cargados desde: carpeta 'animados'")
-    print("  Abriendo en el navegador: http://localhost:5000")
-    print("  Presiona Ctrl+C para detener el servidor")
+    print(f"  App web:     http://localhost:{PORT}")
+    print("  Pose:        ws://127.0.0.1:8765  (backend.main)")
+    print(f"  Modelos:     {ANIMADOS_DIR}")
+    print("  Ctrl+C para detener el servidor")
     print("=" * 60)
-
     threading.Timer(1.5, open_browser).start()
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(host=HOST, port=PORT, debug=False)
+
+
+if __name__ == "__main__":
+    main()
