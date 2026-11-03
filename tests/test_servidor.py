@@ -52,3 +52,15 @@ def test_static_vendor_se_sirve():
     assert (
         app.test_client().get("/static/vendor/three/three.module.js").status_code == 200
     )
+
+
+def test_la_app_no_depende_de_internet():
+    raiz = pathlib.Path(__file__).resolve().parent.parent
+    for archivo in (
+        "templates/index.html",
+        "static/js/app.js",
+        "static/js/pose-source.js",
+    ):
+        texto = (raiz / archivo).read_text(encoding="utf-8")
+        for dominio in ("cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com"):
+            assert dominio not in texto, f"{dominio} aparece en {archivo}"

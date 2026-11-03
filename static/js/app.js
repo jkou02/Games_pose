@@ -661,7 +661,7 @@ function renderizarEspacioLandmarks() {
     const avisoSinPose = document.getElementById('aviso-sin-pose');
 
     // Extraer landmarks extendidos en modo espejo (espejo = true)
-    const P = extraerLandmarksCompletos(estado.poseActual, w, h, true);
+    const P = extraerLandmarksCompletos(estado.landmarksOverlay, w, h, false);
 
     if (!P) {
         if (avisoSinPose) avisoSinPose.classList.remove('oculto');
@@ -767,78 +767,78 @@ function animarParticulasManos(ctx) {
 // ============================================
 // DIBUJO DEL LADO IZQUIERDO (OVERLAY DE CÁMARA)
 // ============================================
-function dibujarOverlayCamara(ctx, landmarks, w, h) {
-    // En el canvas sobre el video, extraemos sin modo espejo (espejo = false, ya que el video usa scaleX(-1))
-    const P = extraerLandmarksCompletos(landmarks, w, h, false);
-    if (!P) return;
+const CONEXIONES_OVERLAY = [
+    ['nose', 'left_shoulder'],
+    ['nose', 'right_shoulder'],
+    ['left_shoulder', 'right_shoulder'],
+    ['left_shoulder', 'left_elbow'],
+    ['left_elbow', 'left_wrist'],
+    ['right_shoulder', 'right_elbow'],
+    ['right_elbow', 'right_wrist'],
+    ['left_hip', 'right_hip'],
+    ['left_shoulder', 'left_hip'],
+    ['right_shoulder', 'right_hip'],
+];
 
-    // Paleta ligera y de alto contraste para el video en vivo
-    const paletaCamara = {
-        columna: '#00FFFF',
-        torso: '#00F0FF',
-        costillas: '#38EF7D',
-        brazoIzq: '#00F0FF',
-        brazoDer: '#00F0FF',
-        manoIzq: '#FFE600',
-        manoDer: '#FFE600',
-        piernaIzq: '#FF007F',
-        piernaDer: '#FF007F',
-        articulacion: '#FFFFFF',
-        pecho: '#FFE600',
-        cabeza: '#00F0FF',
-        cara: '#FFD166',
-        ojos: '#00FFFF',
-        boca: '#FF6B6B',
-        dedos: '#FFE600',
-        glow: 8,
+/**
+ * Dibuja el esqueleto del payload sobre el video.
+ * El canvas está espejado por CSS (#canvas-pose), así que se invierte X para
+ * que los puntos caigan sobre el cuerpo.
+ */
+function dibujarOverlayPayload(ctx, landmarks, w, h) {
+    if (!landmarks) return;
+    const paleta = PALETAS[estado.estiloActual] || PALETAS.neon;
+    const punto = (clave) => {
+        const lm = landmarks[INDICE_OVERLAY[clave]];
+        return lm ? { x: (1 - lm.x) * w, y: lm.y * h } : null;
     };
 
-    dibujarEsqueletoDetallado(ctx, P, paletaCamara, 4);
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = paleta.brazoDer;
+    for (const [a, b] of CONEXIONES_OVERLAY) {
+        const pa = punto(a);
+        const pb = punto(b);
+        if (!pa || !pb) continue;
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = paleta.articulacion;
+    for (const clave of Object.keys(INDICE_OVERLAY)) {
+        const p = punto(clave);
+        if (!p) continue;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+    }
 }
 
 // ============================================
-// MEDIAPIPE POSE EN EL NAVEGADOR
+// PREVIEW DE CÁMARA LOCAL
 // ============================================
-function iniciarMediaPipe() {
+// La pose ya no se infiere acá: llega por WebSocket desde el backend.
+// La cámara local solo se usa como espejo para el público.
+function iniciarVideoLocal() {
     const videoEl = document.getElementById('video-entrada');
-    const canvasEl = document.getElementById('canvas-pose');
-    if (!videoEl || !canvasEl) return;
-    const ctx = canvasEl.getContext('2d');
+    if (!videoEl) return;
 
-    const pose = new Pose({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
-    });
+    if (!navigator.mediaDevices?.getUserMedia) {
+        console.info('Cámara local no disponible: requiere localhost o HTTPS.');
+        return;
+    }
 
-    pose.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        enableSegmentation: false,
-        smoothSegmentation: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-    });
-
-    pose.onResults((results) => {
-        canvasEl.width = videoEl.videoWidth;
-        canvasEl.height = videoEl.videoHeight;
-        ctx.save();
-        ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-
-        if (results.poseLandmarks) {
-            estado.poseActual = results.poseLandmarks;
-            dibujarOverlayCamara(ctx, results.poseLandmarks, canvasEl.width, canvasEl.height);
-        } else {
-            estado.poseActual = null;
-        }
-        ctx.restore();
-    });
-
-    const camera = new Camera(videoEl, {
-        onFrame: async () => { await pose.send({ image: videoEl }); },
-        width: 640,
-        height: 480,
-    });
-    camera.start();
+    navigator.mediaDevices
+        .getUserMedia({ video: { width: 640, height: 480 } })
+        .then((stream) => {
+            videoEl.srcObject = stream;
+            return videoEl.play();
+        })
+        .catch(() => {
+            console.info('Cámara local bloqueada; el avatar sigue funcionando.');
+        });
 }
 
 // ============================================
@@ -1239,7 +1239,21 @@ function anclarPiernas() {
 // ============================================
 // BUCLE PRINCIPAL DE ANIMACIÓN
 // ============================================
+function dibujarOverlayVideo() {
+    const canvas = document.getElementById('canvas-pose');
+    const video = document.getElementById('video-entrada');
+    if (!canvas || !video || !video.videoWidth) return;
+
+    if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
+    if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    dibujarOverlayPayload(ctx, estado.landmarksOverlay, canvas.width, canvas.height);
+}
+
 function loopAnimacion() {
+    dibujarOverlayVideo();
     if (estado.vistaActual === '3d') {
         aplicarPose3D(estado.ultimaPose);
         if (estado.renderizador3d && estado.escena3d && estado.camara3d) {
@@ -1313,7 +1327,7 @@ function configurarEventos() {
 function iniciar() {
     configurarEventos();
     iniciarThreeJS();
-    iniciarMediaPipe();
+    iniciarVideoLocal();
     conectarBackend();
     requestAnimationFrame(loopAnimacion);
 }

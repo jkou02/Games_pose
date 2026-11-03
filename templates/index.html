@@ -33,7 +33,7 @@
 
         <!-- Contenedor principal dividido en dos -->
         <div class="contenedor-principal">
-            <!-- Lado izquierdo: Cámara + Detección MediaPipe -->
+            <!-- Lado izquierdo: Cámara + esqueleto superpuesto -->
             <div class="panel panel-camara">
                 <div class="panel-header">📷 ¡Tú en Cámara!</div>
                 <div class="video-container">
@@ -77,11 +77,7 @@
         <canvas id="canvas-confeti"></canvas>
     </div>
 
-    <!-- MediaPipe Pose desde CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
-
+    <!-- Sin CDN: three está vendorizado en /static/vendor/three -->
     <script type="module" src="/static/js/app.js"></script>
 </body>
 </html>
