@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ciencias Encuentro 2026</title>
+    <link rel="stylesheet" href="/static/css/estilos.css">
+    <!-- Import Map para Three.js y addons modernos -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="pantalla-juego" class="pantalla-juego">
+        <!-- Barra superior -->
+        <div class="barra-superior">
+            <h1 class="titulo-juego">Ciencias Encuentro 2026</h1>
+            <div class="controles-superior">
+                <div class="estilos-barra">
+                    <span class="label-estilo">Estilo:</span>
+                    <button class="btn-estilo activo" data-estilo="neon">🌈 Neón</button>
+                    <button class="btn-estilo" data-estilo="robot">🤖 Robot</button>
+                    <button class="btn-estilo" data-estilo="arcade">👾 Arcade</button>
+                </div>
+                <button id="btn-confeti" class="btn-control btn-fiesta" title="¡Fiesta!">🎉 ¡Fiesta!</button>
+            </div>
+        </div>
+
+        <!-- Contenedor principal dividido en dos -->
+        <div class="contenedor-principal">
+            <!-- Lado izquierdo: Cámara + Detección MediaPipe -->
+            <div class="panel panel-camara">
+                <div class="panel-header">📷 ¡Tú en Cámara!</div>
+                <div class="video-container">
+                    <video id="video-entrada" autoplay playsinline></video>
+                    <canvas id="canvas-pose"></canvas>
+                </div>
+            </div>
+
+            <!-- Lado derecho: Muñeco 3D / Reconstrucción -->
+            <div class="panel panel-derecho">
+                <div class="panel-header header-con-selector">
+                    <span id="titulo-panel-derecho">🤖 Muñeco 3D (Bot de Adobe)</span>
+                    <div class="selector-vista">
+                        <button id="btn-vista-3d" class="btn-vista activo" data-vista="3d">🤖 Muñeco 3D</button>
+                        <button id="btn-vista-2d" class="btn-vista" data-vista="2d">✨ Landmarks 2D</button>
+                    </div>
+                </div>
+                <div class="visor-container">
+                    <!-- Contenedor Three.js para el modelo 3D -->
+                    <div id="contenedor-3d" class="contenedor-3d"></div>
+
+                    <!-- Canvas 2D alternable -->
+                    <canvas id="canvas-landmarks" class="canvas-landmarks oculto"></canvas>
+
+                    <!-- Aviso de espera de detección -->
+                    <div id="aviso-sin-pose" class="aviso-sin-pose">
+                        <div class="icono-onda">👋</div>
+                        <p>¡Párate frente a la cámara para mover el muñeco!</p>
+                    </div>
+
+                    <!-- Indicador de carga del modelo 3D -->
+                    <div id="loading-3d" class="loading-3d">
+                        <div class="spinner-robot">🤖</div>
+                        <p>Cargando Muñeco 3D de Adobe...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Canvas para confeti -->
+        <canvas id="canvas-confeti"></canvas>
+    </div>
+
+    <!-- MediaPipe Pose desde CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+    <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
