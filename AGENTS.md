@@ -75,6 +75,7 @@ El backend transmitirá paquetes en formato JSON en cada cuadro procesado. Para 
     "left_lower_arm": [-0.15, -0.98, 0.1],
     "torso_up": [0.0, 1.0, 0.0],
     "torso_side": [-1.0, 0.0, 0.0],
+    "hips_side": [-1.0, 0.0, 0.0],
     "head": [0.0, 0.55, 0.83]
   }
 }
@@ -147,8 +148,12 @@ Las siguientes características y ajustes **no deben implementarse en el arranqu
   - *Cuándo decidir:* Al finalizar la Fase 4, probando en vivo frente a la cámara web física.
   - *Variables a definir:* Frecuencia de corte mínima (`min_cutoff`) y coeficiente de velocidad (`beta`).
 * **Seguimiento de piernas y anclaje al suelo (*Foot IK / Grounding*):**
-  - *Cuándo decidir:* Al evaluar la Fase 5.
-  - *Alternativa base inicial:* El avatar se mantendrá fijo de la cadera hacia abajo para evitar deslizamientos irreales en el piso (*foot sliding*).
+  - *Paso 1 (hecho):* rotación de cadera con `hips_side` (giro + inclinación).
+    Piernas rígidas respecto de la pelvis; el avatar no se traslada. Queda un
+    patinaje angular leve porque la pelvis pivota sobre su punto.
+  - *Paso 2 (pendiente):* articular muslos y pantorrillas y decidir si se agrega
+    IK de dos huesos para clavar el pie de apoyo. Variables a definir: detección
+    del pie de apoyo, altura del avatar y tolerancia de deslizamiento.
 * **Entorno visual y dirección de arte:**
   - *Cuándo decidir:* Una vez que la cinemática funcione con precisión.
   - *Variables a definir:* Tipo de iluminación (sombras dinámicas vs. luces básicas), textura del escenario, efectos de partículas o estilo visual del avatar.

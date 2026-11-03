@@ -34,7 +34,8 @@ detectada:
 }
 ```
 
-> El ejemplo es anterior a `bones.head`, `bones.torso_side` y `landmarks_2d`.
+> El ejemplo es anterior a `bones.head`, `bones.torso_side`, `bones.hips_side`
+> y `landmarks_2d`.
 > El backend emite hoy los siete huesos y las coordenadas de imagen.
 
 ## Campos
@@ -46,7 +47,7 @@ detectada:
 | `confidence` | float | Promedio de `visibility` de los 9 landmarks del contrato, 3 decimales. |
 | `landmarks` | objeto | 9 puntos, coordenadas `[x, y, z]` en metros. |
 | `landmarks_2d` | objeto | 9 puntos, coordenadas normalizadas `[x, y]` de la imagen (0..1). |
-| `bones` | objeto | 7 vectores unitarios `[x, y, z]`. |
+| `bones` | objeto | 8 vectores unitarios `[x, y, z]`. |
 
 ### `landmarks`
 
@@ -89,9 +90,15 @@ Vectores unitarios (`norma == 1.0`) que apuntan del origen al destino del segmen
 | `left_lower_arm` | `left_elbow` | `left_wrist` |
 | `torso_up` | centro de cadera | centro de hombros |
 | `torso_side` | `right_shoulder` | `left_shoulder` |
+| `hips_side` | `right_hip` | `left_hip` |
 | `head` | centro de hombros | `nose` |
 
 Los nombres `left_*` / `right_*` son siempre desde el punto de vista del sujeto.
+
+`hips_side` define la orientación de la pelvis. El cliente la combina con el eje
+vertical del mundo para obtener giro (yaw) e inclinación (roll); no se usa el
+tronco como vertical porque duplicaría la rotación de la columna, que es hija de
+la cadera.
 
 `torso_up` y `torso_side` se usan juntos para reconstruir la orientación del
 torso. Un solo vector vertical no distingue el giro alrededor de su propio eje: si
@@ -134,6 +141,7 @@ rotaciones de huesos del rig Mixamo, **con swap de lados deliberado**:
 
 | `bones` | Hueso del avatar |
 |---|---|
+| `hips_side` | `mixamorigHips` (base con el +Y del mundo) |
 | `torso_up` + `torso_side` | `mixamorigSpine` (base ortonormal: inclinación + giro) |
 | `head` | `mixamorigNeck` |
 | `right_upper_arm` / `right_lower_arm` | `mixamorigLeftArm` / `mixamorigLeftForeArm` |
