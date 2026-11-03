@@ -9,19 +9,20 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createPoseSource } from '/static/js/pose-source.js';
 
 // ============================================
 // ESTADO GLOBAL
 // ============================================
 const estado = {
-    poseActual: null,
+    ultimaPose: null, // payload del backend (contrato docs/contract.md)
+    landmarksOverlay: null, // landmarks 2D derivados del payload, para el canvas
     estiloActual: 'neon',
     vistaActual: '3d', // '3d' por defecto | '2d' alternable
     particulasManos: [],
     confetis: [],
     fiesta: false,
-    wsConectado: false,
-    poseWebSocket: null,
+    estadoConexion: 'connecting',
 
     // Sistema 3D (Three.js)
     escena3d: null,
@@ -841,33 +842,66 @@ function iniciarMediaPipe() {
 }
 
 // ============================================
-// WEBSOCKET BACKEND (OPCIONAL)
+// WEBSOCKET BACKEND (FUENTE ÚNICA DE POSE)
 // ============================================
-function conectarWebSocket() {
-    try {
-        const ws = new WebSocket('ws://127.0.0.1:8765');
-        ws.onopen = () => {
-            console.log('✅ WebSocket conectado en ws://127.0.0.1:8765');
-            estado.wsConectado = true;
+//: Metros que cubre el alto del encuadre de los paneles 2D.
+const ESCALA_VISTA = 1.4;
+
+//: Índice de MediaPipe de cada landmark del contrato.
+const INDICE_OVERLAY = {
+    nose: 0,
+    left_shoulder: 11,
+    right_shoulder: 12,
+    left_elbow: 13,
+    right_elbow: 14,
+    left_wrist: 15,
+    right_wrist: 16,
+    left_hip: 23,
+    right_hip: 24,
+};
+
+/**
+ * Proyecta los landmarks del payload (metros, cadera al origen, X ya espejada)
+ * al formato normalizado 0..1 que consumen `extraerLandmarksCompletos` y el
+ * overlay. Devuelve un arreglo disperso de 33 posiciones.
+ */
+function payloadALandmarks2D(payload) {
+    if (!payload?.detected) return null;
+    const salida = new Array(33).fill(null);
+    for (const [clave, idx] of Object.entries(INDICE_OVERLAY)) {
+        const p = payload.landmarks?.[clave];
+        if (!p) continue;
+        salida[idx] = {
+            x: 0.5 + p[0] / (2 * ESCALA_VISTA),
+            y: 0.5 - p[1] / (2 * ESCALA_VISTA),
+            z: p[2],
+            visibility: payload.confidence ?? 1,
         };
-        ws.onmessage = (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                if (data.detected) {
-                    estado.poseWebSocket = data;
-                }
-            } catch { /* ignorar */ }
-        };
-        ws.onclose = () => {
-            estado.wsConectado = false;
-            setTimeout(conectarWebSocket, 4000);
-        };
-        ws.onerror = () => {
-            estado.wsConectado = false;
-        };
-    } catch {
-        // standalone browser mode
     }
+    return salida;
+}
+
+function conectarBackend() {
+    const protocolo = location.protocol === 'https:' ? 'wss' : 'ws';
+    const fuente = createPoseSource({
+        // Mismo host que sirvió la página: funciona en LAN sin tocar el código.
+        url: `${protocolo}://${location.hostname}:8765`,
+        onPose: (payload) => {
+            estado.ultimaPose = payload;
+            estado.landmarksOverlay = payloadALandmarks2D(payload);
+        },
+        onStatus: ({ state }) => {
+            const etiqueta = {
+                connecting: '○ conectando',
+                connected: '● conectado',
+                disconnected: '○ sin backend',
+                error: '× error',
+            };
+            estado.estadoConexion = state;
+            console.info('MoCap:', etiqueta[state] ?? state);
+        },
+    });
+    return fuente;
 }
 
 // ============================================
@@ -1330,7 +1364,7 @@ function iniciar() {
     configurarEventos();
     iniciarThreeJS();
     iniciarMediaPipe();
-    conectarWebSocket();
+    conectarBackend();
     requestAnimationFrame(loopAnimacion);
 }
 
