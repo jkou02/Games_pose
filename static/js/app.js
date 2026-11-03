@@ -39,6 +39,17 @@ const estado = {
     restLocalQuats: new Map(),
     huesosPiernas: [],
     huesoCadera: null,
+    piernas: null, // { left: {muslo, pantorrilla, pie, l1, l2}, right: {...} }
+    escalaPiernas: 0, // unidades del modelo por metro del sujeto
+    alturaCaderaTobillo: 0, // cadera-centro -> tobillo en reposo, en unidades
+    legMax: 0, // mayor distancia cadera-tobillo observada del sujeto (m)
+    restAnkleY: 0, // y mundo del tobillo en reposo
+    restHipsY: 0, // y local de la cadera en reposo
+    restHipsWorldY: 0, // y mundo de la cadera en reposo
+    restFootQuat: { left: null, right: null },
+    pieApoyo: null,
+    framesApoyo: 0,
+    apoyoXZ: null,
     cargando3d: true,
 };
 
@@ -1135,7 +1146,7 @@ function iniciarThreeJS() {
             estado.modelo3d = fbx;
             fbx.updateMatrixWorld(true);
 
-            // Identificar y almacenar huesos de las piernas para anclaje estático
+            // Identificar y almacenar huesos de las piernas para el IK.
             const nombresPiernas = [
                 'mixamorigLeftUpLeg', 'mixamorigLeftLeg', 'mixamorigLeftFoot', 'mixamorigLeftToeBase',
                 'mixamorigRightUpLeg', 'mixamorigRightLeg', 'mixamorigRightFoot', 'mixamorigRightToeBase'
@@ -1169,6 +1180,49 @@ function iniciarThreeJS() {
                 hombroD.getWorldPosition(posHombroD);
                 estado.restTorsoSide = posHombroI.sub(posHombroD).normalize();
             }
+
+            // Calibración de piernas: largos, tobillo y cadera en reposo.
+            const LADOS = {
+                left: ['mixamorigLeftUpLeg', 'mixamorigLeftLeg', 'mixamorigLeftFoot'],
+                right: ['mixamorigRightUpLeg', 'mixamorigRightLeg', 'mixamorigRightFoot'],
+            };
+            const distancia = (a, b) => {
+                const pa = new THREE.Vector3();
+                const pb = new THREE.Vector3();
+                a.getWorldPosition(pa);
+                b.getWorldPosition(pb);
+                return pa.distanceTo(pb);
+            };
+            estado.piernas = {};
+            for (const [lado, [muslo, pantorrilla, pie]] of Object.entries(LADOS)) {
+                const bMuslo = estado.huesos3d[muslo];
+                const bPantorrilla = estado.huesos3d[pantorrilla];
+                const bPie = estado.huesos3d[pie];
+                if (!bMuslo || !bPantorrilla || !bPie) {
+                    console.warn(`Rig incompleto: falta la pierna ${lado}`);
+                    continue;
+                }
+                estado.piernas[lado] = {
+                    muslo: bMuslo,
+                    pantorrilla: bPantorrilla,
+                    pie: bPie,
+                    l1: distancia(bMuslo, bPantorrilla),
+                    l2: distancia(bPantorrilla, bPie),
+                };
+                estado.restFootQuat[lado] = bPie.getWorldQuaternion(new THREE.Quaternion());
+                estado.restAnkleY = bPie.getWorldPosition(new THREE.Vector3()).y;
+            }
+            const caderaRest = estado.huesos3d['mixamorigHips'];
+            if (caderaRest) {
+                estado.restHipsY = caderaRest.position.y;
+                estado.restHipsWorldY = caderaRest
+                    .getWorldPosition(new THREE.Vector3())
+                    .y;
+            }
+            // Distancia cadera-centro -> tobillo en el rig. Es la magnitud que
+            // se compara con el payload (que viene centrado en la cadera).
+            estado.alturaCaderaTobillo = estado.restHipsWorldY - estado.restAnkleY;
+            estado.escalaPiernas = estado.alturaCaderaTobillo / 0.9; // arranque
 
             // Referencia de reposo de la pelvis: eje lateral y orientación.
             const cadera = estado.huesos3d['mixamorigHips'];
@@ -1216,12 +1270,15 @@ function aplicarPose3D(payload) {
 
     const avisoSinPose = document.getElementById('aviso-sin-pose');
     const bones = payload?.bones ?? {};
+    const landmarks = payload?.landmarks ?? {};
     // Todos los vectores en cero significa tracking perdido.
     const valido = payload?.detected && (bones.torso_up ?? []).some((v) => v !== 0);
 
     if (valido) {
         if (avisoSinPose) avisoSinPose.classList.add('oculto');
 
+        actualizarEscala(landmarks);
+        actualizarAlturaCadera(landmarks);
         // La columna es hija de la cadera: primero se mueve la pelvis.
         orientarCadera(bones);
         orientarTorso(bones);
@@ -1238,15 +1295,20 @@ function aplicarPose3D(payload) {
             );
             estado.modelo3d.updateMatrixWorld(true);
         }
+
+        // Las piernas van al final: dependen de dónde quedó la cadera.
+        resolverPiernas(landmarks);
     } else {
         if (avisoSinPose && estado.vistaActual === '3d') avisoSinPose.classList.remove('oculto');
         volverAReposo();
     }
-
-    anclarPiernas();
 }
 
 const MUNDO_ARRIBA = new THREE.Vector3(0, 1, 0);
+
+// El payload viene espejado en X (ver docs/contract.md): el tobillo derecho del
+// sujeto corresponde a la pierna izquierda del avatar, igual que en los brazos.
+const ESPEJO_LADOS = { left: 'right', right: 'left' };
 
 /**
  * Orienta la pelvis con `hips_side` + el eje vertical del mundo.
@@ -1357,19 +1419,218 @@ function volverAReposo() {
             const breathQ = restQ.clone();
             breathQ.x += Math.sin(t * 1.6) * 0.015;
             bone.quaternion.slerp(breathQ, 0.08);
-        } else if (!estado.huesosPiernas.includes(bone)) {
-            // Incluye la cadera: vuelve la rotación, nunca la posición.
+        } else {
+            // Incluye cadera y piernas: solo rotación, nunca la posición.
             bone.quaternion.slerp(restQ, 0.08);
         }
     }
+
+    // La altura de la cadera vuelve suave a la de reposo.
+    if (estado.huesoCadera && estado.restHipsY) {
+        estado.huesoCadera.position.y +=
+            (estado.restHipsY - estado.huesoCadera.position.y) * 0.08;
+    }
 }
 
-function anclarPiernas() {
-    // §6: el avatar queda fijo de la cadera hacia abajo. La cadera se ancla una
-    // sola vez al cargar; acá solo se congelan las piernas.
-    for (const leg of estado.huesosPiernas) {
-        const q = estado.restLocalQuats.get(leg);
-        if (q) leg.quaternion.copy(q);
+function distanciaMetros(a, b) {
+    return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+/**
+ * Escala unidades/metro del sujeto.
+ *
+ * Se compara la distancia cadera-tobillo del rig con la del sujeto. Como al
+ * agacharse esa distancia se acorta, se guarda el máximo reciente: la persona
+ * de pie es la referencia. El máximo decae lento para reajustarse si el sujeto
+ * se acerca o se aleja de la cámara.
+ */
+function actualizarEscala(landmarks) {
+    const tI = landmarks.left_ankle;
+    const tD = landmarks.right_ankle;
+    if (!tI || !tD || !estado.alturaCaderaTobillo) return;
+
+    const estirada = Math.max(
+        Math.hypot(tI[0], tI[1], tI[2]),
+        Math.hypot(tD[0], tD[1], tD[2]),
+    );
+    if (estirada < 0.4) return;
+
+    // La referencia es la persona de pie. Solo se reajusta cuando está casi
+    // estirada: si se adaptara durante una agachada, la escala se inflaría y la
+    // cadera quedaría más alta de lo que la pierna alcanza.
+    if (estirada > estado.legMax) {
+        estado.legMax = estirada;
+    } else if (estirada > estado.legMax * 0.98) {
+        estado.legMax = estado.legMax * 0.995 + estirada * 0.005;
+    }
+    const objetivo = Math.min(
+        Math.max(estado.alturaCaderaTobillo / estado.legMax, 60),
+        160,
+    );
+    estado.escalaPiernas += (objetivo - estado.escalaPiernas) * 0.08;
+}
+
+/** Sube o baja la cadera para acompañar la altura del sujeto. */
+function actualizarAlturaCadera(landmarks) {
+    const cadera = estado.huesos3d['mixamorigHips'];
+    const tobillos = [landmarks.left_ankle, landmarks.right_ankle].filter(Boolean);
+    if (!cadera || !tobillos.length || !estado.escalaPiernas) return;
+
+    const masBajo = Math.min(...tobillos.map((t) => t[1]));
+    const mundo = estado.restAnkleY + Math.abs(masBajo) * estado.escalaPiernas;
+    cadera.position.y = estado.restHipsY + (mundo - estado.restHipsWorldY);
+    estado.modelo3d.updateMatrixWorld(true);
+}
+
+/** Pie de apoyo: el tobillo más bajo, con histéresis para que no parpadee. */
+function actualizarApoyo(landmarks) {
+    const tI = landmarks.left_ankle;
+    const tD = landmarks.right_ankle;
+    if (!tI || !tD) return;
+    const candidato = tI[1] <= tD[1] ? 'left' : 'right';
+    if (candidato === estado.pieApoyo) {
+        estado.framesApoyo = 0;
+        return;
+    }
+    estado.framesApoyo += 1;
+    if (estado.framesApoyo >= 3) {
+        estado.pieApoyo = candidato;
+        estado.framesApoyo = 0;
+        estado.apoyoXZ = null; // se recaptura al plantar
+    }
+}
+
+/**
+ * Alinea un hueso con una dirección de mundo usando su dirección ACTUAL.
+ *
+ * A diferencia de `orientarHueso`, no depende de la pose de reposo: mide la
+ * dirección real del hijo y la corrige. Para el IK importa la posición exacta
+ * del pie, y un error de un par de grados en una pierna de ~89 unidades son
+ * centímetros de flotación.
+ */
+function alinearHueso(bone, hijo, dirObjetivo, factor = 1) {
+    if (!bone || !hijo || !dirObjetivo) return;
+    const pB = new THREE.Vector3();
+    const pC = new THREE.Vector3();
+    bone.getWorldPosition(pB);
+    hijo.getWorldPosition(pC);
+    const actual = pC.sub(pB);
+    if (actual.lengthSq() < 1e-8) return;
+    actual.normalize();
+
+    const delta = new THREE.Quaternion().setFromUnitVectors(actual, dirObjetivo);
+    const qMundo = new THREE.Quaternion();
+    bone.getWorldQuaternion(qMundo);
+    const objetivoMundo = delta.multiply(qMundo);
+
+    const qPadre = new THREE.Quaternion();
+    bone.parent.getWorldQuaternion(qPadre);
+    const local = qPadre.invert().multiply(objetivoMundo);
+    if (factor >= 1) {
+        bone.quaternion.copy(local);
+    } else {
+        bone.quaternion.slerp(local, factor);
+    }
+    estado.modelo3d.updateMatrixWorld(true);
+}
+
+function resolverPiernas(landmarks) {
+    const cadera = estado.huesos3d['mixamorigHips'];
+    if (!cadera || !estado.piernas || !landmarks?.left_ankle || !landmarks?.right_ankle) {
+        // Payload viejo o sin tren inferior: se vuelve a la pose neutra.
+        volverAReposo();
+        return;
+    }
+
+    actualizarApoyo(landmarks);
+    const posCadera = cadera.getWorldPosition(new THREE.Vector3());
+
+    for (const ladoPayload of ['left', 'right']) {
+        resolverPierna(
+            ESPEJO_LADOS[ladoPayload],
+            ladoPayload,
+            landmarks[`${ladoPayload}_ankle`],
+            landmarks[`${ladoPayload}_knee`],
+            posCadera,
+        );
+    }
+}
+
+/** IK analítico de dos huesos: cadera → rodilla → tobillo. */
+function resolverPierna(lado, ladoPayload, tobillo, rodilla, posCadera) {
+    const pierna = estado.piernas[lado];
+    if (!pierna || !tobillo) return;
+    const { muslo, pantorrilla, pie, l1, l2 } = pierna;
+    const escala = estado.escalaPiernas;
+
+    // El objetivo se mide desde el centro de cadera, pero el hueso del muslo
+    // arranca un poco más abajo: la raíz del IK es el muslo, no la cadera.
+    const raiz = muslo.getWorldPosition(new THREE.Vector3());
+    const objetivo = new THREE.Vector3(
+        posCadera.x + tobillo[0] * escala,
+        posCadera.y + tobillo[1] * escala,
+        posCadera.z + tobillo[2] * escala,
+    );
+
+    if (ladoPayload === estado.pieApoyo) {
+        objetivo.y = estado.restAnkleY;
+        if (!estado.apoyoXZ) estado.apoyoXZ = { x: objetivo.x, z: objetivo.z };
+        objetivo.x = estado.apoyoXZ.x;
+        objetivo.z = estado.apoyoXZ.z;
+    } else {
+        objetivo.y = Math.max(objetivo.y, estado.restAnkleY);
+    }
+
+    // §7: nunca estirar la malla. Se limita el objetivo al alcance real.
+    const v = objetivo.clone().sub(raiz);
+    // 0.999 y no 0.98: con la pierna estirada el pie quedaba flotando.
+    const maxD = (l1 + l2) * 0.999;
+    const minD = Math.abs(l1 - l2) + 1e-3;
+    const d = Math.min(Math.max(v.length(), minD), maxD);
+    v.setLength(d);
+    objetivo.copy(raiz).add(v);
+
+    const dir = v.clone().normalize();
+    const a = (l1 * l1 - l2 * l2 + d * d) / (2 * d);
+    const h = Math.sqrt(Math.max(l1 * l1 - a * a, 0));
+
+    // Pole vector: la rodilla real del sujeto proyectada perpendicularmente.
+    let pole = null;
+    if (rodilla) {
+        const objetivoRodilla = new THREE.Vector3(
+            posCadera.x + rodilla[0] * escala,
+            posCadera.y + rodilla[1] * escala,
+            posCadera.z + rodilla[2] * escala,
+        );
+        const rel = objetivoRodilla.sub(raiz);
+        const proyeccion = dir.clone().multiplyScalar(rel.dot(dir));
+        pole = rel.sub(proyeccion);
+        if (pole.lengthSq() < 1e-6) pole = null;
+    }
+    if (!pole) {
+        // Sin rodilla válida: el avatar dobla hacia adelante (+Z).
+        const frente = new THREE.Vector3(0, 0, 1);
+        const proyeccion = dir.clone().multiplyScalar(frente.dot(dir));
+        pole = frente.sub(proyeccion);
+        if (pole.lengthSq() < 1e-6) pole = new THREE.Vector3(0, 0, 1);
+    }
+    pole.normalize();
+
+    const posRodilla = raiz
+        .clone()
+        .add(dir.clone().multiplyScalar(a))
+        .add(pole.multiplyScalar(h));
+
+    alinearHueso(muslo, pantorrilla, posRodilla.clone().sub(raiz).normalize());
+    alinearHueso(pantorrilla, pie, objetivo.clone().sub(posRodilla).normalize());
+
+    // Pie nivelado: se conserva la orientación de reposo.
+    const restQ = estado.restFootQuat[lado];
+    if (pie && restQ) {
+        const parentQ = new THREE.Quaternion();
+        pie.parent.getWorldQuaternion(parentQ);
+        pie.quaternion.slerp(parentQ.invert().multiply(restQ), 0.3);
+        estado.modelo3d.updateMatrixWorld(true);
     }
 }
 

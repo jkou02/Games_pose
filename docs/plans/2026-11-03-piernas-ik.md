@@ -499,3 +499,45 @@ evidencia → Task 4.
 `pieApoyo`, `apoyoXZ` se definen en el Step 1 y se usan con el mismo nombre en los
 Steps 2-5. Las claves `left_thigh`/`left_shin` se registran en el Step 2 y se
 consumen en el Step 4.
+
+---
+
+## Estado de ejecución
+
+Ejecutado el 2026-11-03. Las 4 tasks completas.
+
+| Task | Commit | Verificación |
+|---|---|---|
+| 1 — Contrato 13 puntos | `4881eed` | 32 tests; `confidence` sobre 9 puntos |
+| 2 — Documentación | `68db38d` | contrato y `AGENTS.md` §6 |
+| 3 — IK | (ver commit de la Task 3) | sintaxis + navegador |
+| 4 — Verificación | — | ver mediciones abajo |
+
+### Defectos encontrados durante la verificación
+
+Tres correcciones que el plan no anticipaba y que solo aparecieron midiendo en el
+navegador:
+
+1. **Raíz del IK.** Se usaba el hueso `Hips` como raíz, pero el muslo arranca en
+   `UpLeg`, 6,75 unidades más abajo y 8,2 a los lados. El objetivo se mide desde el
+   centro de cadera, así que la raíz del solver debe ser `UpLeg`.
+2. **Escala.** Calibrar con la suma de muslo y pantorrilla daba una escala 7 % baja
+   respecto de la distancia real cadera-centro → tobillo. Se usa esa distancia y un
+   máximo deslizante que solo se reajusta cuando el sujeto está casi estirado: si se
+   adaptara durante la agachada, la cadera quedaría más alta de lo que la pierna
+   alcanza.
+3. **Espejo de lados.** Faltaba invertir izquierda/derecha en las piernas, igual que
+   en los brazos. El pie del avatar perseguía el tobillo del lado opuesto del
+   payload y cruzaba el cuerpo; el objetivo quedaba fuera de alcance y el pie
+   flotaba 1,5 cm. Es el defecto que explicaba el síntoma.
+
+### Mediciones finales
+
+```
+de pie    cadera 103.43 | pie de apoyo 8.72 (= piso) | pie libre 8.72
+agachada  cadera  73.99 | pie de apoyo 8.72          | pie libre 8.72
+pie izq.  cadera 103.43 | pie de apoyo 8.72          | pie levantado 45.56
+```
+
+El alcance real (`l1 + l2` = 88,9 unidades) nunca se supera: el objetivo se limita
+al 99,9 %. Sin errores de consola.
