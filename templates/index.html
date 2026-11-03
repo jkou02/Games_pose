@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ciencias Encuentro 2026</title>
     <link rel="stylesheet" href="/static/css/estilos.css">
-    <!-- Import Map para Three.js y addons modernos -->
+    <!-- Import Map local: three vendorizado en static/vendor/three (sin CDN) -->
     <script type="importmap">
     {
         "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            "three": "/static/vendor/three/three.module.js",
+            "three/addons/": "/static/vendor/three/addons/"
         }
     }
     </script>
