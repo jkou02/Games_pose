@@ -6,7 +6,12 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from backend.kinematics import LANDMARK_KEYS, compute_bones, normalize_landmarks
+from backend.kinematics import (
+    CORE_INDICES,
+    LANDMARK_KEYS,
+    compute_bones,
+    normalize_landmarks,
+)
 from backend.schema import build_payload, empty_payload
 
 
@@ -43,7 +48,7 @@ class PoseEngine:
             return empty_payload()
 
         raw = results.pose_world_landmarks.landmark
-        visibility = [float(raw[index].visibility) for index in LANDMARK_KEYS]
+        visibility = [float(raw[index].visibility) for index in CORE_INDICES]
         confidence = float(np.mean(visibility)) if visibility else 0.0
 
         if confidence < self.min_confidence:

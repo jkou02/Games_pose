@@ -19,6 +19,10 @@ LEFT_WRIST = 15
 RIGHT_WRIST = 16
 LEFT_HIP = 23
 RIGHT_HIP = 24
+LEFT_KNEE = 25
+RIGHT_KNEE = 26
+LEFT_ANKLE = 27
+RIGHT_ANKLE = 28
 
 #: Subconjunto del contrato: índice MediaPipe -> clave del payload.
 LANDMARK_KEYS: dict[int, str] = {
@@ -31,7 +35,26 @@ LANDMARK_KEYS: dict[int, str] = {
     RIGHT_WRIST: "right_wrist",
     LEFT_HIP: "left_hip",
     RIGHT_HIP: "right_hip",
+    LEFT_KNEE: "left_knee",
+    RIGHT_KNEE: "right_knee",
+    LEFT_ANKLE: "left_ankle",
+    RIGHT_ANKLE: "right_ankle",
 }
+
+#: Puntos que definen la confianza del frame. Si la cámara corta los pies, el
+#: avatar no debe congelarse entero, así que los tobillos y las rodillas no
+#: participan del umbral.
+CORE_INDICES: tuple[int, ...] = (
+    NOSE,
+    LEFT_SHOULDER,
+    RIGHT_SHOULDER,
+    LEFT_ELBOW,
+    RIGHT_ELBOW,
+    LEFT_WRIST,
+    RIGHT_WRIST,
+    LEFT_HIP,
+    RIGHT_HIP,
+)
 
 #: Segmentos del contrato: nombre -> (índice origen, índice destino).
 BONE_DEFINITIONS: dict[str, tuple[int, int]] = {

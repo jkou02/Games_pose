@@ -37,6 +37,10 @@ def test_contract_keys_are_the_documented_ones():
         "right_wrist",
         "left_hip",
         "right_hip",
+        "left_knee",
+        "right_knee",
+        "left_ankle",
+        "right_ankle",
     }
     assert set(BONE_DEFINITIONS) == {
         "right_upper_arm",
@@ -117,3 +121,10 @@ def test_hips_side_apunta_de_la_cadera_derecha_a_la_izquierda():
     assert np.linalg.norm(bones["hips_side"]) == pytest.approx(1.0, abs=1e-6)
     # El payload ya está espejado: la cadera izquierda del sujeto queda en -X.
     assert bones["hips_side"][0] == pytest.approx(-1.0, abs=1e-6)
+
+
+def test_landmarks_incluyen_el_tren_inferior():
+    assert {"left_knee", "right_knee", "left_ankle", "right_ankle"} <= set(
+        LANDMARK_KEYS.values()
+    )
+    assert len(LANDMARK_KEYS) == 13

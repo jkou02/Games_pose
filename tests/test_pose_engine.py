@@ -45,6 +45,10 @@ def pose_de_pie():
     world[16], image[16] = Punto(-1.00, -0.55), Punto(0.10, 0.37)
     world[23], image[23] = Punto(0.10, 0.0), Punto(0.56, 0.60)
     world[24], image[24] = Punto(-0.10, 0.0), Punto(0.44, 0.60)
+    world[25], image[25] = Punto(0.10, -0.45), Punto(0.58, 0.75)
+    world[26], image[26] = Punto(-0.10, -0.45), Punto(0.42, 0.75)
+    world[27], image[27] = Punto(0.10, -0.90), Punto(0.60, 0.95)
+    world[28], image[28] = Punto(-0.10, -0.90), Punto(0.40, 0.95)
     return Landmarks(world), Landmarks(image)
 
 
@@ -73,6 +77,11 @@ def test_procesa_frame_y_emite_contrato_completo():
     }
     assert payload["landmarks_2d"]["nose"] == [0.5, 0.2]
     assert payload["landmarks_2d"]["left_shoulder"] == [0.62, 0.35]
+    # El espejo de X: la rodilla izquierda del sujeto queda en -x del payload.
+    assert payload["landmarks"]["left_knee"] == [-0.10, 0.45, 0.0]
+    assert payload["landmarks"]["right_ankle"] == [0.10, 0.90, 0.0]
+    assert payload["landmarks_2d"]["right_ankle"] == [0.4, 0.95]
+    assert len(payload["landmarks"]) == 13
     assert set(payload["landmarks_2d"]) == set(payload["landmarks"])
 
 
@@ -87,3 +96,13 @@ def test_baja_confianza_se_reporta_como_sin_deteccion():
     world, image = pose_de_pie()
     payload = motor(Resultados(world, image), min_confidence=0.99).process(FRAME)
     assert payload["detected"] is False
+
+
+def test_confidence_ignora_el_tren_inferior():
+    """Si la cámara corta los pies, el avatar no debe congelarse entero."""
+    world, image = pose_de_pie()
+    for índice in (25, 26, 27, 28):
+        world.landmark[índice].visibility = 0.0
+    payload = motor(Resultados(world, image)).process(FRAME)
+    assert payload["detected"] is True
+    assert payload["confidence"] > 0.5
